@@ -33,9 +33,8 @@ export default function RegisterPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 40, justifyContent: "center" }}>
-          <Image src="/orb-logo.png" alt="Orb" width={32} height={32} style={{ borderRadius: "50%" }} />
-          <span style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Orb</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 40 }}>
+          <Image src="/orb-logo.png" alt="Orb" width={48} height={48} style={{ borderRadius: "50%" }} />
         </div>
 
         <div className="surface-elevated" style={{ padding: 32 }}>
