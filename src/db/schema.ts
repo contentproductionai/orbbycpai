@@ -1,45 +1,45 @@
 import {
-  mysqlTable,
-  varchar,
+  pgTable,
   text,
   timestamp,
-  int,
+  integer,
   boolean,
-  json,
+  uuid,
   primaryKey,
   index,
-} from "drizzle-orm/mysql-core";
+  json,
+} from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
-export const users = mysqlTable("users", {
-  id: varchar("id", { length: 255 }).primaryKey(),
-  name: varchar("name", { length: 255 }),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  emailVerified: timestamp("email_verified"),
-  image: varchar("image", { length: 255 }),
-  passwordHash: varchar("password_hash", { length: 255 }),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name"),
+  email: text("email").notNull().unique(),
+  emailVerified: timestamp("email_verified", { mode: "date" }),
+  image: text("image"),
+  passwordHash: text("password_hash"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
 
 // ─── NextAuth adapter tables ──────────────────────────────────────────────────
 
-export const accounts = mysqlTable(
+export const accounts = pgTable(
   "accounts",
   {
-    userId: varchar("user_id", { length: 255 }).notNull(),
-    type: varchar("type", { length: 255 }).notNull(),
-    provider: varchar("provider", { length: 255 }).notNull(),
-    providerAccountId: varchar("provider_account_id", { length: 255 }).notNull(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
     refresh_token: text("refresh_token"),
     access_token: text("access_token"),
-    expires_at: int("expires_at"),
-    token_type: varchar("token_type", { length: 255 }),
-    scope: varchar("scope", { length: 255 }),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
     id_token: text("id_token"),
-    session_state: varchar("session_state", { length: 255 }),
+    session_state: text("session_state"),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.provider, table.providerAccountId] }),
@@ -47,24 +47,24 @@ export const accounts = mysqlTable(
   })
 );
 
-export const sessions = mysqlTable(
+export const sessions = pgTable(
   "sessions",
   {
-    sessionToken: varchar("session_token", { length: 255 }).primaryKey(),
-    userId: varchar("user_id", { length: 255 }).notNull(),
-    expires: timestamp("expires").notNull(),
+    sessionToken: text("session_token").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    expires: timestamp("expires", { mode: "date" }).notNull(),
   },
   (table) => ({
     userIdx: index("sessions_user_id_idx").on(table.userId),
   })
 );
 
-export const verificationTokens = mysqlTable(
+export const verificationTokens = pgTable(
   "verification_tokens",
   {
-    identifier: varchar("identifier", { length: 255 }).notNull(),
-    token: varchar("token", { length: 255 }).notNull(),
-    expires: timestamp("expires").notNull(),
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: timestamp("expires", { mode: "date" }).notNull(),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.identifier, table.token] }),
@@ -73,25 +73,23 @@ export const verificationTokens = mysqlTable(
 
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
-export const subscriptions = mysqlTable(
+export const subscriptions = pgTable(
   "subscriptions",
   {
-    id: varchar("id", { length: 255 }).primaryKey(),
-    userId: varchar("user_id", { length: 255 }).notNull().unique(),
-    stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).unique(),
-    stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }).unique(),
-    stripePriceId: varchar("stripe_price_id", { length: 255 }),
-    // Tier: free | starter | growth | pro
-    tier: varchar("tier", { length: 50 }).notNull().default("free"),
-    status: varchar("status", { length: 50 }).notNull().default("active"),
-    // Limits
-    generationsUsed: int("generations_used").notNull().default(0),
-    generationsLimit: int("generations_limit").notNull().default(3),
-    currentPeriodStart: timestamp("current_period_start"),
-    currentPeriodEnd: timestamp("current_period_end"),
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+    stripeCustomerId: text("stripe_customer_id").unique(),
+    stripeSubscriptionId: text("stripe_subscription_id").unique(),
+    stripePriceId: text("stripe_price_id"),
+    tier: text("tier").notNull().default("free"),
+    status: text("status").notNull().default("active"),
+    generationsUsed: integer("generations_used").notNull().default(0),
+    generationsLimit: integer("generations_limit").notNull().default(3),
+    currentPeriodStart: timestamp("current_period_start", { mode: "date" }),
+    currentPeriodEnd: timestamp("current_period_end", { mode: "date" }),
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index("subscriptions_user_id_idx").on(table.userId),
@@ -100,27 +98,22 @@ export const subscriptions = mysqlTable(
 
 // ─── Generations ─────────────────────────────────────────────────────────────
 
-export const generations = mysqlTable(
+export const generations = pgTable(
   "generations",
   {
-    id: varchar("id", { length: 255 }).primaryKey(),
-    userId: varchar("user_id", { length: 255 }).notNull(),
-    // Input
-    brandUrl: varchar("brand_url", { length: 2048 }).notNull(),
-    instagramUrl: varchar("instagram_url", { length: 2048 }),
-    // Extracted brand profile (stored as JSON)
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    brandUrl: text("brand_url").notNull(),
+    instagramUrl: text("instagram_url"),
     brandProfile: json("brand_profile"),
-    // Status: pending | processing | complete | failed
-    status: varchar("status", { length: 50 }).notNull().default("pending"),
+    status: text("status").notNull().default("pending"),
     errorMessage: text("error_message"),
-    // Output: array of image objects { platform, size, url, watermarked }
     images: json("images"),
-    // Payment
     paid: boolean("paid").notNull().default(false),
-    stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
-    downloadUrl: varchar("download_url", { length: 2048 }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    downloadUrl: text("download_url"),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index("generations_user_id_idx").on(table.userId),
@@ -168,3 +161,9 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Generation = typeof generations.$inferSelect;
+export type NewGeneration = typeof generations.$inferInsert;
+export type Subscription = typeof subscriptions.$inferSelect;
