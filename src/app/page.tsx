@@ -1,5 +1,4 @@
 import Link from "next/link";
-import HeroDemo from "@/components/HeroDemo";
 import UfoHero from "@/components/UfoHero";
 
 export default function HomePage() {
@@ -22,44 +21,79 @@ export default function HomePage() {
 
       {/* ── Hero ── */}
       <section style={{
-        flex: 1,
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "0 24px 64px",
-        paddingTop: "260px",   /* leaves room for the absolute-positioned UFO above content */
-        textAlign: "center",
-        position: "relative",
-        overflow: "hidden",
         minHeight: "100vh",
+        padding: "0 24px",
+        textAlign: "center",
+        overflow: "hidden",
       }}>
-
-        {/* Starfield + UFO — absolutely positioned, fills the section */}
+        {/* Starfield + orb — fills section, sits behind text */}
         <UfoHero />
 
-        {/* Ambient glow behind text */}
-        <div aria-hidden style={{ position: "absolute", top: "40%", left: "50%", transform: "translateX(-50%)", width: 700, height: 400, background: "radial-gradient(ellipse at center, rgba(0,212,170,0.06) 0%, transparent 68%)", pointerEvents: "none", zIndex: 1 }} />
+        {/* Text content — above the orb layer */}
+        <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 900 }}>
 
-        {/* All text content sits above the UFO layer */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center" }}>
           {/* Badge */}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 28 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 32 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)" }} />
             <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-native content production</span>
           </div>
 
-          <h1 style={{ fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.03em", color: "var(--text-primary)", maxWidth: 760, marginBottom: 18 }}>
-            Your brand.<br />
-            Every platform.<br />
-            <span className="text-gradient">60 seconds.</span>
+          {/* H1 — three lines matching reference */}
+          <h1 style={{ margin: "0 0 28px", padding: 0, lineHeight: 1.05, letterSpacing: "-0.03em" }}>
+            <span style={{ display: "block", fontSize: "clamp(52px, 8vw, 110px)", fontWeight: 700, color: "#ffffff" }}>
+              Your brand.
+            </span>
+            <span style={{ display: "block", fontSize: "clamp(52px, 8vw, 110px)", fontWeight: 700, color: "#00d4aa" }}>
+              Every platform.
+            </span>
+            <span style={{ display: "block", fontSize: "clamp(52px, 8vw, 110px)", fontWeight: 700, color: "rgba(255,255,255,0.28)" }}>
+              60 seconds.
+            </span>
           </h1>
-          <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 40 }}>
+
+          {/* Subheadline */}
+          <p style={{ fontSize: "clamp(15px, 1.8vw, 19px)", color: "var(--text-secondary)", maxWidth: 560, lineHeight: 1.65, marginBottom: 40 }}>
             Drop your URL. Orb reads your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
           </p>
 
-          {/* Live demo input */}
-          <HeroDemo />
+          {/* CTA row */}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+            <Link
+              href="/register"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                fontSize: 15, fontWeight: 600, color: "#000",
+                background: "#00d4aa",
+                padding: "13px 28px",
+                borderRadius: "var(--radius-md)",
+                textDecoration: "none",
+                boxShadow: "0 0 24px rgba(0,212,170,0.4)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Generate for free →
+            </Link>
+            <Link
+              href="#how-it-works"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                fontSize: 15, fontWeight: 500, color: "var(--text-secondary)",
+                background: "transparent",
+                border: "1px solid var(--border-default)",
+                padding: "13px 24px",
+                borderRadius: "var(--radius-md)",
+                textDecoration: "none",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              <span style={{ fontSize: 16, color: "var(--brand-primary)" }}>◎</span> See demo
+            </Link>
+          </div>
 
           <p style={{ marginTop: 20, fontSize: 12, color: "var(--text-tertiary)" }}>3 free generations · No credit card required</p>
         </div>
@@ -84,7 +118,7 @@ export default function HomePage() {
       </section>
 
       {/* ── How It Works ── */}
-      <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
+      <section id="how-it-works" style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
         <h2 style={{ fontSize: "clamp(26px, 3.5vw, 38px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8, textAlign: "center" }}>How it works</h2>
         <p style={{ fontSize: 15, color: "var(--text-secondary)", textAlign: "center", marginBottom: 48 }}>Three steps. Sixty seconds.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, maxWidth: 900, margin: "0 auto" }}>
@@ -144,16 +178,11 @@ export default function HomePage() {
               <Link
                 href="/register"
                 style={{
-                  display: "block",
-                  textAlign: "center",
-                  fontSize: 13,
-                  fontWeight: 600,
+                  display: "block", textAlign: "center", fontSize: 13, fontWeight: 600,
                   color: plan.highlight ? "#000" : "var(--text-primary)",
                   background: plan.highlight ? "var(--brand-primary)" : "var(--bg-overlay)",
                   border: plan.highlight ? "none" : "1px solid var(--border-default)",
-                  padding: 10,
-                  borderRadius: "var(--radius-md)",
-                  textDecoration: "none",
+                  padding: 10, borderRadius: "var(--radius-md)", textDecoration: "none",
                 }}
               >
                 Get started
