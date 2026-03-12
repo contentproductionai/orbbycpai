@@ -12,7 +12,9 @@ export default function HomePage() {
       <nav style={{ borderBottom: "1px solid var(--border-subtle)", background: "rgba(8,8,8,0.85)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center" }}>
-            <Image src="/orb-logo.png" alt="Orb" width={81} height={81} style={{ borderRadius: "50%" }} />
+            <div style={{ animation: "logo-float 3s ease-in-out infinite", display: "inline-flex" }}>
+              <Image src="/orb-logo.png" alt="Orb" width={81} height={81} style={{ borderRadius: "50%" }} />
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Link href="/login" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", padding: "6px 14px", borderRadius: "var(--radius-md)", textDecoration: "none" }}>Sign in</Link>

@@ -89,6 +89,10 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-4px); }
+}
 @keyframes star-twinkle {
   0%, 100% { opacity: var(--star-base, 0.5); transform: scale(1); }
   50%       { opacity: 1; transform: scale(1.6); }
