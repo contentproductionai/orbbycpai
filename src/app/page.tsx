@@ -99,11 +99,12 @@ export default function HomePage() {
         </div>
 
         <h1 style={{ fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.03em", color: "var(--text-primary)", maxWidth: 760, marginBottom: 18 }}>
-          On-brand content at the{" "}
-          <span className="text-gradient">speed of thought</span>
+          Your brand.<br />
+          Every platform.<br />
+          <span className="text-gradient">60 seconds.</span>
         </h1>
-        <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 480, lineHeight: 1.65, marginBottom: 40 }}>
-          Paste your URL. Orb reads your brand DNA and generates 40 on-brand social posts — ready to download in seconds.
+        <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 40 }}>
+          Drop your URL. Orb reads your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
         </p>
 
         {/* Live demo input */}
