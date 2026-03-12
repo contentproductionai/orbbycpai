@@ -11,7 +11,7 @@ export default function GenerateForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    // TODO: POST to /api/generate — wired in Phase 2
+    // TODO: POST to /api/generate – wired in Phase 2
     await new Promise((r) => setTimeout(r, 1500));
     setLoading(false);
     setError("Generation pipeline will be wired in Phase 2.");

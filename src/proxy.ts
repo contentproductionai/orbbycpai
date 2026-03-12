@@ -1,10 +1,10 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
-// Protected routes — require authentication
+// Protected routes – require authentication
 const protectedRoutes = ["/dashboard", "/generate", "/history", "/settings"];
 
-// Auth routes — redirect to dashboard if already logged in
+// Auth routes – redirect to dashboard if already logged in
 const authRoutes = ["/login", "/register"];
 
 export default auth((req) => {

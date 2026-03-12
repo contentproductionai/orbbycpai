@@ -158,7 +158,7 @@ export default function HeroDemo() {
 
       {complete && (
         <p style={{ marginTop: 10, fontSize: 12, color: "var(--brand-primary)", textAlign: "center", animation: "fade-in 0.3s ease-out" }}>
-          Brand DNA captured — ready to generate 40 posts →
+          Brand DNA captured – ready to generate 40 posts →
         </p>
       )}
     </div>

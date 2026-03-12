@@ -1,6 +1,6 @@
 "use client";
 
-// Deterministic pseudo-random — SSR safe, no Math.random on render
+// Deterministic pseudo-random – SSR safe, no Math.random on render
 function lcg(seed: number) {
   let s = seed;
   return () => {
@@ -9,7 +9,7 @@ function lcg(seed: number) {
   };
 }
 
-// Stars — tiny, faint, fast-moving to feel like warp/flight
+// Stars – tiny, faint, fast-moving to feel like warp/flight
 const STARS = Array.from({ length: 160 }, (_, i) => {
   const rng = lcg(i * 2654435761 + 1);
   const x = rng() * 100;          // % across viewport
@@ -21,7 +21,7 @@ const STARS = Array.from({ length: 160 }, (_, i) => {
   return { x, yStart, size, speed, delay, opacity };
 });
 
-// Particles in beam — drift upward into saucer
+// Particles in beam – drift upward into saucer
 const PARTICLES = Array.from({ length: 14 }, (_, i) => {
   const rng = lcg(i * 999983 + 7);
   const x = 30 + rng() * 40;
@@ -44,7 +44,7 @@ export default function UfoHero() {
         zIndex: 0,
       }}
     >
-      {/* ── Moving starfield — fast upward drift, tiny & faint ── */}
+      {/* ── Moving starfield – fast upward drift, tiny & faint ── */}
       {STARS.map((s, i) => (
         <div
           key={i}
@@ -62,7 +62,7 @@ export default function UfoHero() {
         />
       ))}
 
-      {/* ── UFO — perfectly centered horizontally, floats vertically ── */}
+      {/* ── UFO – perfectly centered horizontally, floats vertically ── */}
       <div style={{
         position: "absolute",
         top: "12%",
@@ -86,7 +86,7 @@ export default function UfoHero() {
             filter: "blur(20px)",
           }} />
 
-          {/* Saucer body — flat ellipse disc */}
+          {/* Saucer body – flat ellipse disc */}
           <div style={{
             position: "absolute",
             top: "52%", left: "50%",
@@ -183,7 +183,7 @@ export default function UfoHero() {
         </div>
       </div>
 
-      {/* Background teal radial — very faint */}
+      {/* Background teal radial – very faint */}
       <div style={{
         position: "absolute",
         top: "20%", left: "50%",

@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create user — let Postgres generate the UUID
+    // Create user – let Postgres generate the UUID
     const [newUser] = await db.insert(users).values({
       name,
       email,

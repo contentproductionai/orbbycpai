@@ -203,7 +203,7 @@ export default function BrandExtractionPanel() {
             </>
           )}
           {isDone && (
-            <span style={{ fontSize: 13, color: "#00d4aa", fontFamily: "monospace" }}>✓ brand DNA locked — sign up to generate</span>
+            <span style={{ fontSize: 13, color: "#00d4aa", fontFamily: "monospace" }}>✓ brand DNA locked – sign up to generate</span>
           )}
           {step === "idle" && (
             <span style={{ fontSize: 12, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>paste your URL above to begin</span>
