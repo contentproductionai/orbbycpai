@@ -12,7 +12,7 @@ export default function HomePage() {
       <nav style={{ borderBottom: "1px solid var(--border-subtle)", background: "rgba(8,8,8,0.85)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center" }}>
-            <Image src="/orb-logo.png" alt="Orb" width={108} height={108} style={{ borderRadius: "50%" }} />
+            <Image src="/orb-logo.png" alt="Orb" width={81} height={81} style={{ borderRadius: "50%" }} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Link href="/login" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", padding: "6px 14px", borderRadius: "var(--radius-md)", textDecoration: "none" }}>Sign in</Link>
@@ -76,7 +76,7 @@ export default function HomePage() {
           {([
             {
               icon: (
-                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
                   {/* UFO saucer body */}
                   <ellipse cx="26" cy="27" rx="12" ry="4" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
@@ -95,7 +95,7 @@ export default function HomePage() {
             },
             {
               icon: (
-                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
                   {/* Triangle/prism — 3D effect with inner lines */}
                   <polygon points="26,14 38,36 14,36" stroke="#00d4aa" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
@@ -111,7 +111,7 @@ export default function HomePage() {
             },
             {
               icon: (
-                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
                   {/* Pill/capsule — rotated ~35deg */}
                   <rect x="18" y="22" width="20" height="10" rx="5" stroke="#00d4aa" strokeWidth="1.5" fill="none" transform="rotate(-35 26 27)"/>
@@ -125,7 +125,7 @@ export default function HomePage() {
             },
             {
               icon: (
-                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
                   {/* Chevron — downward pointing V */}
                   <polyline points="16,20 26,32 36,20" stroke="#00d4aa" strokeWidth="2" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
@@ -139,7 +139,7 @@ export default function HomePage() {
             },
             {
               icon: (
-                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
                   {/* Orb/eye — outer ring + inner circle + pupil dot */}
                   <circle cx="26" cy="26" r="11" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
@@ -154,7 +154,7 @@ export default function HomePage() {
             },
             {
               icon: (
-                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
                   {/* Jellyfish — dome bell */}
                   <path d="M16 26 Q16 17 26 17 Q36 17 36 26" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
