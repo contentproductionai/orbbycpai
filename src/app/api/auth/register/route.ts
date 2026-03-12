@@ -4,7 +4,6 @@ import { users, subscriptions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { randomUUID } from "crypto";
 
 const registerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -41,20 +40,17 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const userId = randomUUID();
 
-    // Create user
-    await db.insert(users).values({
-      id: userId,
+    // Create user — let Postgres generate the UUID
+    const [newUser] = await db.insert(users).values({
       name,
       email,
       passwordHash,
-    });
+    }).returning({ id: users.id });
 
     // Create free tier subscription
     await db.insert(subscriptions).values({
-      id: randomUUID(),
-      userId,
+      userId: newUser.id,
       tier: "free",
       status: "active",
       generationsUsed: 0,

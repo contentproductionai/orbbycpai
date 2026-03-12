@@ -14,7 +14,6 @@
     "@stripe/stripe-js": "^8.9.0",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.1",
-    "mysql2": "^3.19.1",
     "next": "16.1.6",
     "next-auth": "5.0.0-beta.30",
     "react": "19.2.3",
