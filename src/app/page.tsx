@@ -74,15 +74,50 @@ export default function HomePage() {
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
           {[
-            { icon: "◎", title: "Brand extraction", body: "Paste any URL. Orb reads your colors, typography, shape language, and tone of voice automatically." },
-            { icon: "⬡", title: "40 posts per generation", body: "10 unique designs across Instagram, Facebook, LinkedIn, and X — every size, every format." },
-            { icon: "◈", title: "Chat-based editing", body: "Make the background darker. Use a warmer photo. Orb refines in real time." },
-            { icon: "⬙", title: "WCAG AA guaranteed", body: "Every post passes 4.5:1 contrast ratio. Accessibility is non-negotiable." },
+            {
+              icon: "◎",
+              title: "Brand extraction",
+              body: "Paste any URL and Orb reverse-engineers your visual identity — colors, typography, shape language, and tone of voice — automatically, in seconds.",
+              pills: ["Color palettes", "Font matching", "Tone of voice", "Logo detection"],
+            },
+            {
+              icon: "⬡",
+              title: "40 posts per generation",
+              body: "10 unique design concepts, each rendered across Instagram, Facebook, LinkedIn, and X — every dimension, every crop, every format. One click.",
+              pills: ["Instagram 1:1 & 9:16", "LinkedIn banners", "Facebook covers", "X cards"],
+            },
+            {
+              icon: "◈",
+              title: "Chat-based editing",
+              body: "Skip the design tool. Just describe the change — 'make the background darker,' 'swap the photo,' 'try a warmer palette' — and Orb refines in real time.",
+              pills: ["Natural language edits", "Instant preview", "Version history"],
+            },
+            {
+              icon: "⬙",
+              title: "Built for performance",
+              body: "Every post is optimized for the algorithm — platform-native ratios, high-contrast visuals, and copy length calibrated for engagement. What looks great also converts.",
+              pills: ["Contrast optimized", "Platform-native sizing", "Engagement-tuned copy", "Instant download"],
+            },
           ].map((f) => (
-            <div key={f.title} className="surface" style={{ padding: 24 }}>
+            <div key={f.title} className="surface" style={{ padding: 24, display: "flex", flexDirection: "column" }}>
               <div style={{ fontSize: 22, marginBottom: 12, color: "var(--brand-primary)" }}>{f.icon}</div>
               <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8, letterSpacing: "-0.01em" }}>{f.title}</h3>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6 }}>{f.body}</p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{f.body}</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {f.pills.map((pill) => (
+                  <span key={pill} style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "rgba(0,212,170,0.85)",
+                    background: "rgba(0,212,170,0.08)",
+                    border: "1px solid rgba(0,212,170,0.18)",
+                    borderRadius: 100,
+                    padding: "3px 10px",
+                    letterSpacing: "0.01em",
+                    whiteSpace: "nowrap" as const,
+                  }}>{pill}</span>
+                ))}
+              </div>
             </div>
           ))}
         </div>
