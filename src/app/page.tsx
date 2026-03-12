@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HeroDemo from "@/components/HeroDemo";
+import UfoHero from "@/components/UfoHero";
 
 export default function HomePage() {
   return (
@@ -9,7 +10,6 @@ export default function HomePage() {
       <nav style={{ borderBottom: "1px solid var(--border-subtle)", background: "rgba(8,8,8,0.85)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Orb logo mark — teal radial */}
             <div style={{ width: 28, height: 28, borderRadius: "50%", background: "radial-gradient(circle at 35% 35%, #00d4aa, #00856b)", boxShadow: "0 0 12px rgba(0,212,170,0.45)" }} />
             <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Orb</span>
           </div>
@@ -21,96 +21,48 @@ export default function HomePage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px 64px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+      <section style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "0 24px 64px",
+        paddingTop: "260px",   /* leaves room for the absolute-positioned UFO above content */
+        textAlign: "center",
+        position: "relative",
+        overflow: "hidden",
+        minHeight: "100vh",
+      }}>
 
-        {/* Background ambient glow */}
-        <div aria-hidden style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", width: 700, height: 500, background: "radial-gradient(ellipse at center, rgba(0,212,170,0.07) 0%, transparent 68%)", pointerEvents: "none" }} />
+        {/* Starfield + UFO — absolutely positioned, fills the section */}
+        <UfoHero />
 
-        {/* ── UFO element ── */}
-        <div
-          aria-hidden
-          style={{
-            position: "relative",
-            width: 120,
-            height: 120,
-            margin: "0 auto 40px",
-            animation: "orb-float 4s ease-in-out infinite",
-          }}
-        >
-          {/* Outer orbit ring */}
-          <div style={{
-            position: "absolute",
-            top: "50%", left: "50%",
-            width: 110, height: 110,
-            marginTop: -55, marginLeft: -55,
-            borderRadius: "50%",
-            border: "1px solid rgba(0,212,170,0.18)",
-            transform: "rotateX(75deg)",
-            animation: "orbit-spin 8s linear infinite",
-          }} />
-          {/* Inner orbit ring */}
-          <div style={{
-            position: "absolute",
-            top: "50%", left: "50%",
-            width: 80, height: 80,
-            marginTop: -40, marginLeft: -40,
-            borderRadius: "50%",
-            border: "1px solid rgba(0,212,170,0.28)",
-            transform: "rotateX(75deg)",
-            animation: "orbit-spin-slow 5s linear infinite",
-          }} />
-          {/* The orb itself */}
-          <div style={{
-            position: "absolute",
-            top: "50%", left: "50%",
-            width: 44, height: 44,
-            marginTop: -22, marginLeft: -22,
-            borderRadius: "50%",
-            background: "radial-gradient(circle at 38% 38%, #00d4aa 0%, #007a62 60%, #003d31 100%)",
-            boxShadow: "0 0 24px rgba(0,212,170,0.5), 0 0 48px rgba(0,212,170,0.18)",
-          }} />
-          {/* Tractor beam */}
-          <div style={{
-            position: "absolute",
-            top: "62%", left: "50%",
-            transform: "translateX(-50%)",
-            width: 44,
-            height: 56,
-            background: "linear-gradient(to bottom, rgba(0,212,170,0.22) 0%, rgba(0,212,170,0.04) 70%, transparent 100%)",
-            clipPath: "polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)",
-            animation: "beam-pulse 3s ease-in-out infinite",
-            overflow: "hidden",
-          }}>
-            {/* Scan line inside beam */}
-            <div style={{
-              position: "absolute",
-              left: 0, right: 0,
-              height: 1,
-              background: "rgba(0,212,170,0.55)",
-              animation: "scan-line 2s linear infinite",
-            }} />
+        {/* Ambient glow behind text */}
+        <div aria-hidden style={{ position: "absolute", top: "40%", left: "50%", transform: "translateX(-50%)", width: 700, height: 400, background: "radial-gradient(ellipse at center, rgba(0,212,170,0.06) 0%, transparent 68%)", pointerEvents: "none", zIndex: 1 }} />
+
+        {/* All text content sits above the UFO layer */}
+        <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          {/* Badge */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 28 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)" }} />
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-native content production</span>
           </div>
+
+          <h1 style={{ fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.03em", color: "var(--text-primary)", maxWidth: 760, marginBottom: 18 }}>
+            Your brand.<br />
+            Every platform.<br />
+            <span className="text-gradient">60 seconds.</span>
+          </h1>
+          <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 40 }}>
+            Drop your URL. Orb reads your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
+          </p>
+
+          {/* Live demo input */}
+          <HeroDemo />
+
+          <p style={{ marginTop: 20, fontSize: 12, color: "var(--text-tertiary)" }}>3 free generations · No credit card required</p>
         </div>
-
-        {/* Badge */}
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 28 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)" }} />
-          <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-native content production</span>
-        </div>
-
-        <h1 style={{ fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, lineHeight: 1.1, letterSpacing: "-0.03em", color: "var(--text-primary)", maxWidth: 760, marginBottom: 18 }}>
-          Your brand.<br />
-          Every platform.<br />
-          <span className="text-gradient">60 seconds.</span>
-        </h1>
-        <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 40 }}>
-          Drop your URL. Orb reads your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
-        </p>
-
-        {/* Live demo input */}
-        <HeroDemo />
-
-        <p style={{ marginTop: 20, fontSize: 12, color: "var(--text-tertiary)" }}>3 free generations · No credit card required</p>
       </section>
 
       {/* ── Feature grid ── */}
@@ -137,24 +89,9 @@ export default function HomePage() {
         <p style={{ fontSize: 15, color: "var(--text-secondary)", textAlign: "center", marginBottom: 48 }}>Three steps. Sixty seconds.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, maxWidth: 900, margin: "0 auto" }}>
           {[
-            {
-              step: "01",
-              icon: "⬡",
-              title: "Signal",
-              body: "Drop your URL. Orb reads your brand DNA — colors, type, tone, and shape language — in seconds.",
-            },
-            {
-              step: "02",
-              icon: "◎",
-              title: "Generate",
-              body: "10 designs × 4 platforms = 40 images in 60 seconds. Every format, every size, every time.",
-            },
-            {
-              step: "03",
-              icon: "◈",
-              title: "Refine & Download",
-              body: "Chat to adjust anything. Make the background darker. Swap the photo. Download instantly — no ZIP files.",
-            },
+            { step: "01", icon: "⬡", title: "Signal", body: "Drop your URL. Orb reads your brand DNA — colors, type, tone, and shape language — in seconds." },
+            { step: "02", icon: "◎", title: "Generate", body: "10 designs × 4 platforms = 40 images in 60 seconds. Every format, every size, every time." },
+            { step: "03", icon: "◈", title: "Refine & Download", body: "Chat to adjust anything. Make the background darker. Swap the photo. Download instantly — no ZIP files." },
           ].map((s) => (
             <div key={s.step} className="surface" style={{ padding: 28, position: "relative" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--brand-primary)", letterSpacing: "0.1em", marginBottom: 16, opacity: 0.7 }}>STEP {s.step}</div>
@@ -172,24 +109,9 @@ export default function HomePage() {
         <p style={{ fontSize: 15, color: "var(--text-secondary)", textAlign: "center", marginBottom: 40 }}>Start free. Scale when you&apos;re ready.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, maxWidth: 900, margin: "0 auto" }}>
           {[
-            {
-              name: "Starter",
-              price: "$49",
-              features: ["10 generations/mo", "All 4 platforms", "Instant download", "Generation history"],
-              highlight: false,
-            },
-            {
-              name: "Growth",
-              price: "$99",
-              features: ["25 generations/mo", "All 4 platforms", "Instant download", "Chat editing", "Priority support"],
-              highlight: true,
-            },
-            {
-              name: "Pro",
-              price: "$199",
-              features: ["75 generations/mo", "All 4 platforms", "Instant download", "Chat editing", "API access", "Dedicated support"],
-              highlight: false,
-            },
+            { name: "Starter", price: "$49", features: ["10 generations/mo", "All 4 platforms", "Instant download", "Generation history"], highlight: false },
+            { name: "Growth", price: "$99", features: ["25 generations/mo", "All 4 platforms", "Instant download", "Chat editing", "Priority support"], highlight: true },
+            { name: "Pro", price: "$199", features: ["75 generations/mo", "All 4 platforms", "Instant download", "Chat editing", "API access", "Dedicated support"], highlight: false },
           ].map((plan) => (
             <div
               key={plan.name}
