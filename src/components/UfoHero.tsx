@@ -9,22 +9,22 @@ function lcg(seed: number) {
   };
 }
 
-// Stars — each has a fixed x, random y start, speed, size, opacity
-const STARS = Array.from({ length: 120 }, (_, i) => {
+// Stars — tiny, faint, fast-moving to feel like warp/flight
+const STARS = Array.from({ length: 160 }, (_, i) => {
   const rng = lcg(i * 2654435761 + 1);
-  const x = rng() * 100;
-  const y = rng() * 100;
-  const size = 1 + rng() * 2;
-  const speed = 18 + rng() * 28; // seconds for one full upward cycle
-  const delay = -(rng() * speed); // negative delay = already mid-flight on load
-  const opacity = 0.2 + rng() * 0.55;
-  return { x, y, size, speed, delay, opacity };
+  const x = rng() * 100;          // % across viewport
+  const yStart = rng() * 100;     // % starting position
+  const size = 0.5 + rng() * 1.2; // very small: 0.5–1.7px
+  const speed = 6 + rng() * 10;   // fast: 6–16s per full cycle (was 18–46s)
+  const delay = -(rng() * speed); // already in motion on load
+  const opacity = 0.08 + rng() * 0.22; // very faint: 0.08–0.30
+  return { x, yStart, size, speed, delay, opacity };
 });
 
-// Particles in the beam — drift upward into the saucer
+// Particles in beam — drift upward into saucer
 const PARTICLES = Array.from({ length: 14 }, (_, i) => {
   const rng = lcg(i * 999983 + 7);
-  const x = 30 + rng() * 40; // % within beam width
+  const x = 30 + rng() * 40;
   const dur = 2.2 + rng() * 2.4;
   const delay = -(rng() * dur);
   const size = 2 + rng() * 3;
@@ -44,155 +44,154 @@ export default function UfoHero() {
         zIndex: 0,
       }}
     >
-      {/* ── Moving starfield — drift upward, wrap around ── */}
+      {/* ── Moving starfield — fast upward drift, tiny & faint ── */}
       {STARS.map((s, i) => (
         <div
           key={i}
           style={{
             position: "absolute",
             left: `${s.x}%`,
+            top: `${s.yStart}%`,
             width: s.size,
             height: s.size,
             borderRadius: "50%",
-            background: "#fff",
+            background: "#ffffff",
             opacity: s.opacity,
-            // animationName drives the upward drift; star-twinkle adds pulse
-            animation: `star-drift ${s.speed}s linear ${s.delay}s infinite, star-twinkle ${2 + (i % 3)}s ease-in-out ${(i * 0.3) % 2}s infinite`,
-            // start position encoded via CSS custom property trick via top
-            top: `${s.y}%`,
+            animation: `star-drift ${s.speed}s linear ${s.delay}s infinite`,
           }}
         />
       ))}
 
-      {/* ── UFO — positioned above center, floats gently ── */}
+      {/* ── UFO — perfectly centered horizontally, floats vertically ── */}
       <div style={{
         position: "absolute",
-        top: "16%",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: 160,
-        height: 160,
+        top: "12%",
+        left: 0,
+        right: 0,
+        display: "flex",
+        justifyContent: "center",
         animation: "orb-float 5s ease-in-out infinite",
+        pointerEvents: "none",
       }}>
+        <div style={{ position: "relative", width: 200, height: 200 }}>
 
-        {/* Outer diffuse teal glow */}
-        <div style={{
-          position: "absolute",
-          top: "50%", left: "50%",
-          width: 220, height: 100,
-          marginTop: -50, marginLeft: -110,
-          borderRadius: "50%",
-          background: "radial-gradient(ellipse at center, rgba(0,212,170,0.22) 0%, transparent 70%)",
-          filter: "blur(18px)",
-        }} />
-
-        {/* Saucer body — flat ellipse disc */}
-        <div style={{
-          position: "absolute",
-          top: "52%", left: "50%",
-          width: 130, height: 28,
-          marginTop: -14, marginLeft: -65,
-          borderRadius: "50%",
-          background: "linear-gradient(180deg, rgba(0,212,170,0.25) 0%, rgba(0,60,50,0.8) 60%, rgba(0,20,16,0.95) 100%)",
-          boxShadow: "0 0 20px rgba(0,212,170,0.3), 0 4px 12px rgba(0,0,0,0.8)",
-          border: "1px solid rgba(0,212,170,0.35)",
-        }} />
-
-        {/* Saucer dome — rounded top */}
-        <div style={{
-          position: "absolute",
-          top: "28%", left: "50%",
-          width: 72, height: 40,
-          marginLeft: -36,
-          borderRadius: "50% 50% 0 0",
-          background: "linear-gradient(160deg, rgba(0,212,170,0.18) 0%, rgba(0,40,32,0.85) 100%)",
-          border: "1px solid rgba(0,212,170,0.25)",
-          borderBottom: "none",
-          boxShadow: "inset 0 4px 12px rgba(0,212,170,0.12)",
-        }} />
-
-        {/* Rim glow strip */}
-        <div style={{
-          position: "absolute",
-          top: "calc(52% - 2px)", left: "50%",
-          width: 130, height: 4,
-          marginLeft: -65,
-          borderRadius: 2,
-          background: "linear-gradient(90deg, transparent 0%, rgba(0,212,170,0.6) 30%, rgba(0,212,170,0.8) 50%, rgba(0,212,170,0.6) 70%, transparent 100%)",
-          filter: "blur(2px)",
-          animation: "beam-pulse 3s ease-in-out infinite",
-        }} />
-
-        {/* Orbit ring */}
-        <div style={{
-          position: "absolute",
-          top: "50%", left: "50%",
-          width: 155, height: 155,
-          marginTop: -77, marginLeft: -77,
-          borderRadius: "50%",
-          border: "1px solid rgba(0,212,170,0.12)",
-          transform: "rotateX(78deg)",
-          animation: "orbit-spin 14s linear infinite",
-        }} />
-
-        {/* Tractor beam — tapered downward */}
-        <div style={{
-          position: "absolute",
-          top: "calc(52% + 12px)",
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 110,
-          height: 200,
-          background: "linear-gradient(to bottom, rgba(0,212,170,0.15) 0%, rgba(0,212,170,0.06) 60%, transparent 100%)",
-          clipPath: "polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)",
-          animation: "beam-pulse 4s ease-in-out infinite",
-          overflow: "visible",
-        }}>
-          {/* Scan lines */}
+          {/* Outer diffuse teal glow */}
           <div style={{
             position: "absolute",
-            left: 0, right: 0, height: 1,
-            background: "linear-gradient(90deg, transparent, rgba(0,212,170,0.5), transparent)",
-            animation: "scan-line 2.8s linear infinite",
+            top: "50%", left: "50%",
+            width: 280, height: 120,
+            marginTop: -60, marginLeft: -140,
+            borderRadius: "50%",
+            background: "radial-gradient(ellipse at center, rgba(0,212,170,0.2) 0%, transparent 70%)",
+            filter: "blur(20px)",
           }} />
+
+          {/* Saucer body — flat ellipse disc */}
           <div style={{
             position: "absolute",
-            left: 0, right: 0, height: 1,
-            background: "linear-gradient(90deg, transparent, rgba(0,212,170,0.3), transparent)",
-            animation: "scan-line 2.8s linear 1.4s infinite",
+            top: "52%", left: "50%",
+            width: 140, height: 30,
+            marginTop: -15, marginLeft: -70,
+            borderRadius: "50%",
+            background: "linear-gradient(180deg, rgba(0,212,170,0.22) 0%, rgba(0,60,50,0.8) 55%, rgba(0,20,16,0.95) 100%)",
+            boxShadow: "0 0 24px rgba(0,212,170,0.28), 0 4px 14px rgba(0,0,0,0.8)",
+            border: "1px solid rgba(0,212,170,0.3)",
           }} />
-        </div>
 
-        {/* Particles rising into beam */}
-        {PARTICLES.map((p, i) => (
-          <div
-            key={i}
-            style={{
+          {/* Saucer dome */}
+          <div style={{
+            position: "absolute",
+            top: "28%", left: "50%",
+            width: 76, height: 42,
+            marginLeft: -38,
+            borderRadius: "50% 50% 0 0",
+            background: "linear-gradient(160deg, rgba(0,212,170,0.16) 0%, rgba(0,40,32,0.85) 100%)",
+            border: "1px solid rgba(0,212,170,0.22)",
+            borderBottom: "none",
+            boxShadow: "inset 0 4px 12px rgba(0,212,170,0.1)",
+          }} />
+
+          {/* Rim glow strip */}
+          <div style={{
+            position: "absolute",
+            top: "calc(52% - 2px)", left: "50%",
+            width: 140, height: 4,
+            marginLeft: -70,
+            borderRadius: 2,
+            background: "linear-gradient(90deg, transparent 0%, rgba(0,212,170,0.55) 25%, rgba(0,212,170,0.85) 50%, rgba(0,212,170,0.55) 75%, transparent 100%)",
+            filter: "blur(2px)",
+            animation: "beam-pulse 3s ease-in-out infinite",
+          }} />
+
+          {/* Orbit ring */}
+          <div style={{
+            position: "absolute",
+            top: "50%", left: "50%",
+            width: 170, height: 170,
+            marginTop: -85, marginLeft: -85,
+            borderRadius: "50%",
+            border: "1px solid rgba(0,212,170,0.12)",
+            transform: "rotateX(78deg)",
+            animation: "orbit-spin 14s linear infinite",
+          }} />
+
+          {/* Tractor beam */}
+          <div style={{
+            position: "absolute",
+            top: "calc(52% + 13px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 120,
+            height: 210,
+            background: "linear-gradient(to bottom, rgba(0,212,170,0.14) 0%, rgba(0,212,170,0.05) 60%, transparent 100%)",
+            clipPath: "polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)",
+            animation: "beam-pulse 4s ease-in-out infinite",
+            overflow: "visible",
+          }}>
+            <div style={{
               position: "absolute",
-              left: `calc(50% - 55px + ${p.x / 100 * 110}px)`,
-              top: "calc(52% + 200px)",
-              width: p.size,
-              height: p.size,
-              borderRadius: "50%",
-              background: "#00d4aa",
-              opacity: p.opacity,
-              animation: `particle-rise ${p.dur}s ease-in ${p.delay}s infinite`,
-              boxShadow: "0 0 4px rgba(0,212,170,0.8)",
-            }}
-          />
-        ))}
+              left: 0, right: 0, height: 1,
+              background: "linear-gradient(90deg, transparent, rgba(0,212,170,0.5), transparent)",
+              animation: "scan-line 2.8s linear infinite",
+            }} />
+            <div style={{
+              position: "absolute",
+              left: 0, right: 0, height: 1,
+              background: "linear-gradient(90deg, transparent, rgba(0,212,170,0.3), transparent)",
+              animation: "scan-line 2.8s linear 1.4s infinite",
+            }} />
+          </div>
+
+          {/* Particles rising into beam */}
+          {PARTICLES.map((p, i) => (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: `calc(50% - 60px + ${p.x / 100 * 120}px)`,
+                top: "calc(52% + 210px)",
+                width: p.size,
+                height: p.size,
+                borderRadius: "50%",
+                background: "#00d4aa",
+                opacity: p.opacity,
+                animation: `particle-rise ${p.dur}s ease-in ${p.delay}s infinite`,
+                boxShadow: "0 0 4px rgba(0,212,170,0.8)",
+              }}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Background teal radial — very faint, centered */}
+      {/* Background teal radial — very faint */}
       <div style={{
         position: "absolute",
-        top: "30%", left: "50%",
+        top: "20%", left: "50%",
         width: 600, height: 400,
         marginLeft: -300,
         borderRadius: "50%",
-        background: "radial-gradient(ellipse at center, rgba(0,212,170,0.07) 0%, transparent 65%)",
+        background: "radial-gradient(ellipse at center, rgba(0,212,170,0.06) 0%, transparent 65%)",
         filter: "blur(40px)",
-        pointerEvents: "none",
       }} />
     </div>
   );
