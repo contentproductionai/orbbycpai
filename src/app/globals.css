@@ -13,9 +13,9 @@
   --text-secondary: #a1a1aa;
   --text-tertiary: #52525b;
   --text-disabled: #3f3f46;
-  --brand-primary: #7c3aed;
-  --brand-glow: rgba(124, 58, 237, 0.25);
-  --brand-subtle: rgba(124, 58, 237, 0.08);
+  --brand-primary: #00d4aa;
+  --brand-glow: rgba(0, 212, 170, 0.22);
+  --brand-subtle: rgba(0, 212, 170, 0.08);
   --success: #22c55e;
   --warning: #f59e0b;
   --error: #ef4444;
@@ -58,11 +58,34 @@ body {
 .surface { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
 .surface-elevated { background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-lg); }
 .glow-brand { box-shadow: 0 0 0 1px var(--brand-primary), 0 0 20px var(--brand-glow); }
-.text-gradient { background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 50%, #4f46e5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.text-gradient { background: linear-gradient(135deg, #00d4aa 0%, #00b894 50%, #00a381 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 
 @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 var(--brand-glow); } 50% { box-shadow: 0 0 0 8px transparent; } }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+/* UFO orbit ring animation */
+@keyframes orbit-spin {
+  from { transform: rotateX(75deg) rotateZ(0deg); }
+  to   { transform: rotateX(75deg) rotateZ(360deg); }
+}
+@keyframes orbit-spin-slow {
+  from { transform: rotateX(75deg) rotateZ(0deg); }
+  to   { transform: rotateX(75deg) rotateZ(-360deg); }
+}
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+@keyframes beam-pulse {
+  0%, 100% { opacity: 0.18; transform: scaleX(1); }
+  50%       { opacity: 0.32; transform: scaleX(1.04); }
+}
+@keyframes scan-line {
+  0%   { top: 0%; opacity: 0.7; }
+  80%  { opacity: 0.7; }
+  100% { top: 100%; opacity: 0; }
+}
 
 .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }

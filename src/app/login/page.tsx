@@ -33,7 +33,7 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: 400 }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 40, justifyContent: "center" }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle at 35% 35%, #a78bfa, #7c3aed)", boxShadow: "0 0 16px rgba(124,58,237,0.5)" }} />
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle at 35% 35%, #00d4aa, #00856b)", boxShadow: "0 0 16px rgba(0,212,170,0.45)" }} />
           <span style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Orb</span>
         </div>
 
@@ -73,7 +73,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              style={{ width: "100%", background: loading ? "var(--bg-overlay)" : "var(--brand-primary)", color: "#fff", border: "none", borderRadius: "var(--radius-md)", padding: "11px", fontSize: 14, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", boxShadow: loading ? "none" : "0 0 20px var(--brand-glow)", transition: "all 0.15s", marginTop: 4 }}
+              style={{ width: "100%", background: loading ? "var(--bg-overlay)" : "var(--brand-primary)", color: loading ? "var(--text-secondary)" : "#000", border: "none", borderRadius: "var(--radius-md)", padding: "11px", fontSize: 14, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", boxShadow: loading ? "none" : "0 0 20px var(--brand-glow)", transition: "all 0.15s", marginTop: 4 }}
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
@@ -82,7 +82,7 @@ export default function LoginPage() {
 
         <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "var(--text-secondary)" }}>
           No account?{" "}
-          <Link href="/register" style={{ color: "#a78bfa", textDecoration: "none", fontWeight: 500 }}>Create one free</Link>
+          <Link href="/register" style={{ color: "var(--brand-primary)", textDecoration: "none", fontWeight: 500 }}>Create one free</Link>
         </p>
       </div>
     </div>
