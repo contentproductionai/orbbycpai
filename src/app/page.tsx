@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import UfoHero from "@/components/UfoHero";
@@ -72,34 +73,108 @@ export default function HomePage() {
       {/* ── Feature grid ── */}
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-          {[
+          {([
             {
-              icon: "◎",
-              title: "Brand extraction",
+              icon: (
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* UFO saucer body */}
+                  <ellipse cx="26" cy="27" rx="12" ry="4" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* UFO dome */}
+                  <path d="M20 27 Q20 21 26 21 Q32 21 32 27" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* UFO ring/orbit */}
+                  <ellipse cx="26" cy="27" rx="16" ry="5.5" stroke="#00d4aa" strokeWidth="1" fill="none" opacity="0.5"/>
+                  {/* Beam */}
+                  <path d="M22 31 L19 38 M30 31 L33 38" stroke="#00d4aa" strokeWidth="1" opacity="0.4"/>
+                  <line x1="19" y1="38" x2="33" y2="38" stroke="#00d4aa" strokeWidth="1" opacity="0.3"/>
+                </svg>
+              ),
+              title: "Brand Extraction",
               body: "Paste any URL and Orb reverse-engineers your visual identity — colors, typography, shape language, and tone of voice — automatically, in seconds.",
               pills: ["Color palettes", "Font matching", "Tone of voice", "Logo detection"],
             },
             {
-              icon: "⬡",
-              title: "40 posts per generation",
+              icon: (
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* Triangle/prism — 3D effect with inner lines */}
+                  <polygon points="26,14 38,36 14,36" stroke="#00d4aa" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
+                  {/* Inner prism lines */}
+                  <line x1="26" y1="14" x2="26" y2="36" stroke="#00d4aa" strokeWidth="1" opacity="0.5"/>
+                  <line x1="26" y1="36" x2="32" y2="25" stroke="#00d4aa" strokeWidth="1" opacity="0.5"/>
+                  <line x1="26" y1="36" x2="20" y2="25" stroke="#00d4aa" strokeWidth="1" opacity="0.5"/>
+                </svg>
+              ),
+              title: "40 Posts Per Generation",
               body: "10 unique design concepts, each rendered across Instagram, Facebook, LinkedIn, and X — every dimension, every crop, every format. One click.",
               pills: ["Instagram 1:1 & 9:16", "LinkedIn banners", "Facebook covers", "X cards"],
             },
             {
-              icon: "◈",
-              title: "Chat-based editing",
+              icon: (
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* Pill/capsule — rotated ~35deg */}
+                  <rect x="18" y="22" width="20" height="10" rx="5" stroke="#00d4aa" strokeWidth="1.5" fill="none" transform="rotate(-35 26 27)"/>
+                  {/* Small circle detail inside pill */}
+                  <circle cx="22" cy="30" r="2.5" stroke="#00d4aa" strokeWidth="1" fill="none" transform="rotate(-35 26 27)"/>
+                </svg>
+              ),
+              title: "Chat-Based Editing",
               body: "Skip the design tool. Just describe the change — 'make the background darker,' 'swap the photo,' 'try a warmer palette' — and Orb refines in real time.",
               pills: ["Natural language edits", "Instant preview", "Version history"],
             },
             {
-              icon: "⬙",
-              title: "Built for performance",
+              icon: (
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* Chevron — downward pointing V */}
+                  <polyline points="16,20 26,32 36,20" stroke="#00d4aa" strokeWidth="2" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+                  {/* Second inner chevron for depth */}
+                  <polyline points="19,20 26,29 33,20" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinejoin="round" strokeLinecap="round" opacity="0.45"/>
+                </svg>
+              ),
+              title: "Built for Performance",
               body: "Every post is optimized for the algorithm — platform-native ratios, high-contrast visuals, and copy length calibrated for engagement. What looks great also converts.",
               pills: ["Contrast optimized", "Platform-native sizing", "Engagement-tuned copy", "Instant download"],
             },
-          ].map((f) => (
+            {
+              icon: (
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* Orb/eye — outer ring + inner circle + pupil dot */}
+                  <circle cx="26" cy="26" r="11" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  <circle cx="26" cy="26" r="6" stroke="#00d4aa" strokeWidth="1.2" fill="none"/>
+                  {/* Pupil/highlight dot */}
+                  <circle cx="28.5" cy="23.5" r="1.8" fill="#00d4aa" opacity="0.9"/>
+                </svg>
+              ),
+              title: "Generation History",
+              body: "Every set you generate is saved to your account — organized by brand, browsable anytime, and re-downloadable in one click. Nothing gets lost.",
+              pills: ["Saved to account", "Organized by brand", "Re-downloadable"],
+            },
+            {
+              icon: (
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* Jellyfish — dome bell */}
+                  <path d="M16 26 Q16 17 26 17 Q36 17 36 26" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
+                  {/* Bell bottom wavy edge */}
+                  <path d="M16 26 Q18 28 20 26 Q22 24 24 26 Q26 28 28 26 Q30 24 32 26 Q34 28 36 26" stroke="#00d4aa" strokeWidth="1.2" fill="none"/>
+                  {/* Tentacles */}
+                  <path d="M19 27 Q18 31 19 35" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
+                  <path d="M22 27 Q21 32 22 36" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
+                  <path d="M26 27 Q26 32 26 37" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
+                  <path d="M30 27 Q31 32 30 36" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
+                  <path d="M33 27 Q34 31 33 35" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
+                </svg>
+              ),
+              title: "Multi-Brand Profiles",
+              body: "Managing more than one brand? Save unlimited brand profiles and switch between them instantly. Each one remembers its own colors, fonts, and tone.",
+              pills: ["Unlimited profiles", "Instant switching", "Per-brand memory"],
+            },
+          ] as { icon: React.ReactNode; title: string; body: string; pills: string[] }[]).map((f) => (
             <div key={f.title} className="surface" style={{ padding: 24, display: "flex", flexDirection: "column" }}>
-              <div style={{ fontSize: 22, marginBottom: 12, color: "var(--brand-primary)" }}>{f.icon}</div>
+              <div style={{ marginBottom: 14 }}>{f.icon}</div>
               <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8, letterSpacing: "-0.01em" }}>{f.title}</h3>
               <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{f.body}</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
