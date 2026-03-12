@@ -1,5 +1,7 @@
 import Link from "next/link";
+import Image from "next/image";
 import UfoHero from "@/components/UfoHero";
+import BrandExtractionPanel from "@/components/BrandExtractionPanel";
 
 export default function HomePage() {
   return (
@@ -9,7 +11,7 @@ export default function HomePage() {
       <nav style={{ borderBottom: "1px solid var(--border-subtle)", background: "rgba(8,8,8,0.85)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "radial-gradient(circle at 35% 35%, #00d4aa, #00856b)", boxShadow: "0 0 12px rgba(0,212,170,0.45)" }} />
+            <Image src="/orb-logo.png" alt="Orb" width={28} height={28} style={{ borderRadius: "50%" }} />
             <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Orb</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -27,75 +29,44 @@ export default function HomePage() {
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        padding: "0 24px",
+        padding: "0 24px 64px",
         textAlign: "center",
         overflow: "hidden",
       }}>
         {/* Starfield + orb — fills section, sits behind text */}
         <UfoHero />
 
-        {/* Text content — above the orb layer */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 900 }}>
+        {/* Text + panel — above the orb layer */}
+        <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 760, width: "100%" }}>
 
           {/* Badge */}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 32 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 28 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)" }} />
             <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-native content production</span>
           </div>
 
-          {/* H1 — three lines matching reference */}
-          <h1 style={{ margin: "0 0 28px", padding: 0, lineHeight: 1.05, letterSpacing: "-0.03em" }}>
-            <span style={{ display: "block", fontSize: "clamp(52px, 8vw, 110px)", fontWeight: 700, color: "#ffffff" }}>
+          {/* H1 — original clamp size restored */}
+          <h1 style={{ margin: "0 0 18px", padding: 0, lineHeight: 1.05, letterSpacing: "-0.03em" }}>
+            <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "#ffffff" }}>
               Your brand.
             </span>
-            <span style={{ display: "block", fontSize: "clamp(52px, 8vw, 110px)", fontWeight: 700, color: "#00d4aa" }}>
+            <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "#00d4aa" }}>
               Every platform.
             </span>
-            <span style={{ display: "block", fontSize: "clamp(52px, 8vw, 110px)", fontWeight: 700, color: "rgba(255,255,255,0.28)" }}>
+            <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "rgba(255,255,255,0.28)" }}>
               60 seconds.
             </span>
           </h1>
 
           {/* Subheadline */}
-          <p style={{ fontSize: "clamp(15px, 1.8vw, 19px)", color: "var(--text-secondary)", maxWidth: 560, lineHeight: 1.65, marginBottom: 40 }}>
+          <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 36 }}>
             Drop your URL. Orb reads your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
           </p>
 
-          {/* CTA row */}
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-            <Link
-              href="/register"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 8,
-                fontSize: 15, fontWeight: 600, color: "#000",
-                background: "#00d4aa",
-                padding: "13px 28px",
-                borderRadius: "var(--radius-md)",
-                textDecoration: "none",
-                boxShadow: "0 0 24px rgba(0,212,170,0.4)",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Generate for free →
-            </Link>
-            <Link
-              href="#how-it-works"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 8,
-                fontSize: 15, fontWeight: 500, color: "var(--text-secondary)",
-                background: "transparent",
-                border: "1px solid var(--border-default)",
-                padding: "13px 24px",
-                borderRadius: "var(--radius-md)",
-                textDecoration: "none",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              <span style={{ fontSize: 16, color: "var(--brand-primary)" }}>◎</span> See demo
-            </Link>
-          </div>
+          {/* Brand extraction panel */}
+          <BrandExtractionPanel />
 
-          <p style={{ marginTop: 20, fontSize: 12, color: "var(--text-tertiary)" }}>3 free generations · No credit card required</p>
+          <p style={{ marginTop: 16, fontSize: 12, color: "var(--text-tertiary)" }}>3 free generations · No credit card required</p>
         </div>
       </section>
 

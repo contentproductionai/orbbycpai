@@ -86,6 +86,9 @@ body {
   80%  { opacity: 0.7; }
   100% { top: 100%; opacity: 0; }
 }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 @keyframes star-twinkle {
   0%, 100% { opacity: var(--star-base, 0.5); transform: scale(1); }
   50%       { opacity: 1; transform: scale(1.6); }
