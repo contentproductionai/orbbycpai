@@ -2,149 +2,36 @@
  * POST /api/extract
  *
  * Accepts { url: string } in the request body.
- * Runs the brand extractor pipeline (extract_dom.js → classify_brand.py)
- * and streams results back as Server-Sent Events (SSE).
+ * Runs the brand extraction pipeline (Puppeteer DOM scrape + Claude classification)
+ * and streams progress events via SSE.
  *
  * Event types:
- *   { type: "status",   message: string }
- *   { type: "color",    hex: string, contexts: string[], count: number }
- *   { type: "font",     family: string, weight: string, role: string }
- *   { type: "tone",     directness: string, formality: string, emotionality: string, summary: string }
- *   { type: "photo",    style: string, subject: string }
- *   { type: "complete", generationId: string, brandProfile: object }
+ *   { type: "status",   step: number, total: number, message: string }
+ *   { type: "token",    field: string, value: string }
+ *   { type: "complete", generationId: string, brandProfile: BrandProfile }
  *   { type: "error",    message: string }
- *
- * On completion, a new row is inserted into the generations table with
- * status "pending" and the full brand_profile stored.
  */
-
 import { NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { generations } from "@/db/schema";
-import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
+import { extractDom } from "@/lib/pipeline/runPipeline";
+import { classifyBrand } from "@/lib/pipeline/classifyBrand";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-const EXTRACTOR_DIR = "/home/ubuntu/orb_brand_extractor";
-const PIPELINE_DIR = "/home/ubuntu/orb_pipeline";
 
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
-async function runExtraction(
-  url: string,
-  workDir: string,
-  emit: (data: object) => void
-): Promise<object> {
-  // Step 1: DOM extraction
-  emit({ type: "status", message: "Extracting brand signals from website..." });
-
-  const extractScript = path.join(EXTRACTOR_DIR, "extract_dom.js");
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn("node", [extractScript, url], {
-      cwd: EXTRACTOR_DIR,
-      env: { ...process.env },
-    });
-    let stderr = "";
-    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
-    proc.on("close", (code: number) => {
-      if (code !== 0) reject(new Error(`DOM extraction failed: ${stderr.slice(0, 400)}`));
-      else resolve();
-    });
-    proc.on("error", reject);
-  });
-
-  emit({ type: "status", message: "Analyzing brand identity with AI..." });
-
-  // Step 2: LLM classification
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn("python3.11", ["classify_brand.py"], {
-      cwd: EXTRACTOR_DIR,
-      env: {
-        ...process.env,
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
-      },
-    });
-    let stderr = "";
-    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
-    proc.on("close", (code: number) => {
-      if (code !== 0) reject(new Error(`Classification failed: ${stderr.slice(0, 400)}`));
-      else resolve();
-    });
-    proc.on("error", reject);
-  });
-
-  // Read the brand profile
-  const profilePath = path.join(EXTRACTOR_DIR, "brand_profile.json");
-  const profile = JSON.parse(fs.readFileSync(profilePath, "utf-8"));
-
-  // Copy outputs to workDir
-  for (const fname of ["raw_dom_data.json", "brand_profile.json", "screenshot.png"]) {
-    const src = path.join(EXTRACTOR_DIR, fname);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(workDir, fname));
-    }
-  }
-
-  // Stream individual brand tokens as events
-  const palette: Array<{ hex: string; contexts: string[]; count: number }> =
-    profile.colorPalette || [];
-  for (const color of palette.slice(0, 6)) {
-    emit({
-      type: "color",
-      hex: color.hex,
-      contexts: color.contexts || [],
-      count: color.count || 1,
-    });
-  }
-
-  const typo = profile.typography || {};
-  if (typo.headline?.fontFamily) {
-    emit({
-      type: "font",
-      family: typo.headline.fontFamily,
-      weight: typo.headline.fontWeight || "700",
-      role: "headline",
-    });
-  }
-  if (typo.body?.fontFamily && typo.body.fontFamily !== typo.headline?.fontFamily) {
-    emit({
-      type: "font",
-      family: typo.body.fontFamily,
-      weight: typo.body.fontWeight || "400",
-      role: "body",
-    });
-  }
-
-  const tone = profile.tone || {};
-  emit({
-    type: "tone",
-    directness: tone.directness || "",
-    formality: tone.formality || "",
-    emotionality: tone.emotionality || "",
-    summary: tone.summary || "",
-  });
-
-  const photo = profile.photography || {};
-  emit({
-    type: "photo",
-    style: photo.style || "",
-    subject: photo.subject || "",
-  });
-
-  return profile;
-}
-
 export async function POST(req: NextRequest) {
   const session = await auth();
-  const userId = session?.user?.id;
+  const userId = (session?.user as { id?: string } | undefined)?.id;
   if (!userId) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
@@ -156,31 +43,28 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  const { url } = body;
-  if (!url || typeof url !== "string") {
+  const rawUrl = (body.url ?? "").trim();
+  if (!rawUrl) {
     return new Response(JSON.stringify({ error: "url is required" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  // Validate URL
   try {
-    new URL(url.startsWith("http") ? url : `https://${url}`);
+    new URL(rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`);
   } catch {
     return new Response(JSON.stringify({ error: "Invalid URL" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
+  const normalizedUrl = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
   const workDir = path.join(os.tmpdir(), `orb-extract-${randomUUID()}`);
   fs.mkdirSync(workDir, { recursive: true });
 
@@ -192,15 +76,39 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        const profile = await runExtraction(normalizedUrl, workDir, emit);
+        // Step 1: DOM extraction
+        emit({ type: "status", step: 1, total: 2, message: "Extracting brand signals from website..." });
+        const raw = await extractDom(normalizedUrl, workDir, emit);
 
-        // Insert a new generation row with status "pending"
+        // Emit discovered tokens
+        const rawTyped = raw as Record<string, unknown>;
+        if (rawTyped.brandName) emit({ type: "token", field: "brandName", value: String(rawTyped.brandName) });
+        const colors = (rawTyped.colorSamples as Array<{ hex: string }>) ?? [];
+        if (colors.length > 0) {
+          emit({ type: "token", field: "colors", value: colors.slice(0, 5).map((c) => c.hex).join(", ") });
+        }
+
+        // Step 2: Brand classification
+        emit({ type: "status", step: 2, total: 2, message: "Classifying brand identity with Claude..." });
+        const profile = await classifyBrand(raw);
+
+        // Emit key brand tokens
+        emit({ type: "token", field: "brandPersonality", value: profile.brandPersonality });
+        emit({ type: "token", field: "tone", value: profile.tone.summary });
+        emit({ type: "token", field: "primaryColor", value: profile.primaryColor });
+        emit({ type: "token", field: "accentColor", value: profile.accentColor });
+        const hlFont = (profile.typography?.headline as Record<string, string | undefined>)?.fontFamily;
+        if (hlFont) emit({ type: "token", field: "headlineFont", value: hlFont });
+        if (profile.statistics?.length > 0) emit({ type: "token", field: "statistics", value: `${profile.statistics.length} found` });
+        if (profile.testimonials?.length > 0) emit({ type: "token", field: "testimonials", value: `${profile.testimonials.length} found` });
+
+        // Insert generation row
         const [generation] = await db
           .insert(generations)
           .values({
-            userId: userId,
+            userId,
             brandUrl: normalizedUrl,
-            brandProfile: profile as Record<string, unknown>,
+            brandProfile: profile as unknown as Record<string, unknown>,
             status: "pending",
           })
           .returning({ id: generations.id });
@@ -214,7 +122,6 @@ export async function POST(req: NextRequest) {
         const message = err instanceof Error ? err.message : String(err);
         emit({ type: "error", message });
       } finally {
-        // Clean up temp dir
         try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
         controller.close();
       }

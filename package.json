@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
-    "build": "next build --webpack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postbuild": "cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static 2>/dev/null || true"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@auth/drizzle-adapter": "^1.11.1",
     "@neondatabase/serverless": "^1.0.2",
     "@stripe/stripe-js": "^8.9.0",
@@ -17,6 +19,7 @@
     "drizzle-orm": "^0.45.1",
     "next": "16.1.6",
     "next-auth": "5.0.0-beta.30",
+    "puppeteer": "^24.39.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "stripe": "^20.4.1",

@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["child_process", "fs", "path", "os", "crypto"],
+  output: "standalone",
+  serverExternalPackages: ["puppeteer", "@anthropic-ai/sdk"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.pexels.com",
+      },
+    ],
   },
 };
 
