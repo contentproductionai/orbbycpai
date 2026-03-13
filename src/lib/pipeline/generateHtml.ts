@@ -9,7 +9,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { BrandProfile } from "./classifyBrand";
 
-const GENERATION_MODEL = "claude-opus-4-5";
+const GENERATION_MODEL = "claude-opus-4-6";
 
 const SYSTEM_PROMPT = `You are an elite social media creative director and front-end engineer. Your output is a single, self-contained HTML file that renders a pixel-perfect social media post.
 
