@@ -565,9 +565,11 @@ export async function renderSizes(
   html: string,
   workDir: string,
   basename: string,
-  sizes: string[] = ["portrait", "story", "square"]
+  sizes: string[] = ["portrait", "story", "square"],
+  sharedBrowser?: Browser
 ): Promise<Record<string, string>> {
-  const browser: Browser = await puppeteer.launch({
+  const ownBrowser = !sharedBrowser;
+  const browser: Browser = sharedBrowser ?? await puppeteer.launch({
     headless: true,
     executablePath: getChromiumPath(),
     args: [
@@ -611,7 +613,8 @@ export async function renderSizes(
       }
     }
   } finally {
-    await browser.close();
+    // Only close if we own this browser instance
+    if (ownBrowser) await browser.close();
   }
 
   return results;
@@ -653,6 +656,21 @@ export async function runFullPipeline(
   const schemaIds = selectSchemas(brandProfile as unknown as Record<string, unknown>);
   const images: ImageResult[] = [];
 
+  // Launch a single shared Puppeteer browser for all schemas to save memory and startup time
+  const sharedBrowser: Browser = await puppeteer.launch({
+    headless: true,
+    executablePath: getChromiumPath(),
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--font-render-hinting=none",
+      "--disable-web-security",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
+  });
+
+  try {
   for (const schemaId of schemaIds) {
     const schema: Schema = SCHEMA_BY_ID[schemaId];
     if (!schema) continue;
@@ -704,8 +722,8 @@ export async function runFullPipeline(
     const htmlPath = path.join(workDir, `${schemaId}.html`);
     fs.writeFileSync(htmlPath, html);
 
-    // Render all sizes
-    const renderResults = await renderSizes(html, workDir, schemaId, schema.sizes);
+    // Render all sizes using the shared browser
+    const renderResults = await renderSizes(html, workDir, schemaId, schema.sizes, sharedBrowser);
 
     for (const [size, filePath] of Object.entries(renderResults)) {
       images.push({
@@ -717,6 +735,9 @@ export async function runFullPipeline(
       });
       emit({ type: "image", schemaId, size, filePath });
     }
+  }
+  } finally {
+    await sharedBrowser.close();
   }
 
   emit({ type: "status", step: 5, total: 5, message: "Finalizing..." });

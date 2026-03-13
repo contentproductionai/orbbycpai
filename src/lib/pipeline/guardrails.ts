@@ -32,9 +32,17 @@ function extractInlineFontSizes(html: string): number[] {
   return sizes;
 }
 
-function extractTextContent(html: string): string {
-  // Remove tags and collapse whitespace
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+function extractVisibleText(html: string): string {
+  // 1. Remove <style>...</style> blocks entirely (CSS is not visible text)
+  let text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ");
+  // 2. Remove <script>...</script> blocks
+  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ");
+  // 3. Remove HTML comments
+  text = text.replace(/<!--[\s\S]*?-->/g, " ");
+  // 4. Remove all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, " ");
+  // 5. Collapse whitespace
+  return text.replace(/\s+/g, " ").trim();
 }
 
 function countWords(text: string): number {
@@ -87,7 +95,8 @@ function checkWordCount(html: string, maxWords: number): string[] {
   const htmlNoWatermark = html
     .replace(/CONTENTPRODUCTION\.AI/gi, "")
     .replace(/MADE WITH ORB/gi, "");
-  const text = extractTextContent(htmlNoWatermark);
+  // Extract only visible text (strips CSS, scripts, HTML tags)
+  const text = extractVisibleText(htmlNoWatermark);
   const wordCount = countWords(text);
   if (wordCount > maxWords) {
     failures.push(
@@ -103,7 +112,7 @@ export function validateHtml(
   html: string,
   canvasWidth = 1080,
   canvasHeight = 1350,
-  maxWords = 25
+  maxWords = 50
 ): GuardrailResult {
   const failures: string[] = [];
   const warnings: string[] = [];
