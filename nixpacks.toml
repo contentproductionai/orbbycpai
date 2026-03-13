@@ -1,23 +1,20 @@
 [phases.setup]
 nixPkgs = ["nodejs_22"]
 aptPkgs = [
-  "software-properties-common",
-  "libnss3",
-  "libatk1.0-0",
-  "libatk-bridge2.0-0",
-  "libcups2",
-  "libgbm1",
+  "fonts-liberation",
+  "libappindicator3-1",
   "libasound2t64",
-  "libpangocairo-1.0-0",
-  "libxss1",
+  "libatk-bridge2.0-0",
+  "libatk1.0-0",
+  "libgbm1",
   "libgtk-3-0",
-  "libxshmfence1",
-  "libglu1-mesa"
-]
-cmds = [
-  "add-apt-repository ppa:xtradeb/apps -y",
-  "apt-get update",
-  "apt-get install -y chromium"
+  "libnspr4",
+  "libnss3",
+  "libxss1",
+  "libxtst6",
+  "xdg-utils",
+  "libcups2",
+  "libxshmfence1"
 ]
 
 [phases.install]
