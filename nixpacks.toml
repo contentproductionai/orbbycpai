@@ -1,6 +1,24 @@
 [phases.setup]
-nixPkgs = ["chromium", "nodejs_22"]
-aptPkgs = ["libnss3", "libatk1.0-0", "libatk-bridge2.0-0", "libcups2", "libgbm1", "libasound2t64", "libpangocairo-1.0-0", "libxss1", "libgtk-3-0", "libxshmfence1", "libglu1-mesa"]
+nixPkgs = ["nodejs_22"]
+aptPkgs = [
+  "software-properties-common",
+  "libnss3",
+  "libatk1.0-0",
+  "libatk-bridge2.0-0",
+  "libcups2",
+  "libgbm1",
+  "libasound2t64",
+  "libpangocairo-1.0-0",
+  "libxss1",
+  "libgtk-3-0",
+  "libxshmfence1",
+  "libglu1-mesa"
+]
+cmds = [
+  "add-apt-repository ppa:xtradeb/apps -y",
+  "apt-get update",
+  "apt-get install -y chromium"
+]
 
 [phases.install]
 cmds = ["npx --yes pnpm@10.32.1 install --frozen-lockfile"]
