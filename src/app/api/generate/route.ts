@@ -63,11 +63,41 @@ export async function POST(req: NextRequest) {
   fs.mkdirSync(workDir, { recursive: true });
 
   const encoder = new TextEncoder();
+  let streamClosed = false;
+
   const stream = new ReadableStream({
     async start(controller) {
+      // Safe emit — never throws even if stream is closed
       const emit = (data: object) => {
-        controller.enqueue(encoder.encode(sse(data)));
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(sse(data)));
+        } catch {
+          streamClosed = true;
+        }
       };
+
+      // Safe close
+      const closeStream = () => {
+        if (streamClosed) return;
+        streamClosed = true;
+        try { controller.close(); } catch {}
+      };
+
+      // Keepalive ping every 25 seconds to prevent Railway's proxy from
+      // closing the SSE connection during long-running pipeline steps
+      const keepaliveInterval = setInterval(() => {
+        if (streamClosed) {
+          clearInterval(keepaliveInterval);
+          return;
+        }
+        try {
+          controller.enqueue(encoder.encode(": keepalive\n\n"));
+        } catch {
+          streamClosed = true;
+          clearInterval(keepaliveInterval);
+        }
+      }, 25000);
 
       try {
         // Fetch generation row
@@ -79,13 +109,13 @@ export async function POST(req: NextRequest) {
 
         if (!generation) {
           emit({ type: "error", message: "Generation not found" });
-          controller.close();
+          closeStream();
           return;
         }
 
         if (generation.userId !== userId) {
           emit({ type: "error", message: "Unauthorized" });
-          controller.close();
+          closeStream();
           return;
         }
 
@@ -104,7 +134,7 @@ export async function POST(req: NextRequest) {
             type: "error",
             message: `Generation limit reached (${subscription.generationsLimit} per period). Please upgrade your plan.`,
           });
-          controller.close();
+          closeStream();
           return;
         }
 
@@ -155,6 +185,7 @@ export async function POST(req: NextRequest) {
         emit({ type: "complete", generationId, images: finalImages });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error("[generate] Pipeline error:", message);
         try {
           await db
             .update(generations)
@@ -163,8 +194,9 @@ export async function POST(req: NextRequest) {
         } catch {}
         emit({ type: "error", message });
       } finally {
+        clearInterval(keepaliveInterval);
         try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
-        controller.close();
+        closeStream();
       }
     },
   });
@@ -174,6 +206,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no", // Disable Nginx buffering (Railway uses Nginx proxy)
     },
   });
 }
