@@ -1,10 +1,14 @@
 /**
- * extractDom.ts — Scoring-model brand signal extractor
+ * extractDom.ts — DOM Discovery
  *
- * Phase 1: Collect all signals independently (colors, fonts, logo, stats, testimonials)
- * Phase 2: Cross-validate colors by weight — same color from multiple sources = higher score
- * Phase 3: AND-validate elements (logo, H1, CTA, stats, testimonials)
- * Phase 4: Output ranked brandPrimary, brandSecondary, accentColor + validated elements
+ * Responsibility: DISCOVERY ONLY. No classification.
+ * Outputs:
+ *   - scoredPalette: every color found, with source list and accumulated score
+ *   - discoveredFonts: every font family found, with the elements it appeared on
+ *   - logo, stats, testimonials, copyText, images (unchanged)
+ *
+ * Classification of which color is "primary" and which font is "heading"
+ * is handled downstream by classifyVisual.ts (Claude Vision).
  */
 
 import puppeteer from "puppeteer";
@@ -82,9 +86,18 @@ export async function extractDom(
 
     await new Promise((r) => setTimeout(r, 1500));
 
-    // Screenshot for reference
+    // Full-page screenshot for Claude Vision classification step
     const screenshotPath = path.join(workDir, "screenshot.png");
-    await page.screenshot({ path: screenshotPath, fullPage: false }).catch(() => {});
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+
+    // Also take a viewport-only screenshot for the vision call (smaller file)
+    const viewportScreenshotPath = path.join(workDir, "screenshot_viewport.jpg");
+    await page.screenshot({
+      path: viewportScreenshotPath,
+      fullPage: false,
+      type: "jpeg",
+      quality: 80,
+    }).catch(() => {});
 
     console.log("[extractDom] Starting page.evaluate...");
 
@@ -113,45 +126,30 @@ export async function extractDom(
         );
       }
 
-      // True if color is near-white, near-black, or gray (not a brand color)
-      function isNeutral(hex: string): boolean {
-        const h = hex.replace("#", "");
-        if (h.length !== 6) return true;
-        const r = parseInt(h.slice(0, 2), 16);
-        const g = parseInt(h.slice(2, 4), 16);
-        const b = parseInt(h.slice(4, 6), 16);
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        // Saturation too low OR near-white OR near-black
-        return (max - min) < 20 || lum > 0.93 || lum < 0.03;
-      }
-
       // Add a color signal to the scoring map
       function addColorSignal(
-        map: Map<string, { score: number; sources: string[] }>,
+        map: Map<string, { score: number; sources: string[]; totalArea: number }>,
         hex: string | null,
         source: string,
-        weight: number
+        weight: number,
+        area: number = 0
       ) {
         if (!hex) return;
-        // Find existing entry that's similar
         for (const [key, entry] of map.entries()) {
           if (colorsSimilar(key, hex)) {
             entry.score += weight;
             entry.sources.push(source);
+            entry.totalArea += area;
             return;
           }
         }
-        map.set(hex, { score: weight, sources: [source] });
+        map.set(hex, { score: weight, sources: [source], totalArea: area });
       }
 
-      // Read background-color AND background shorthand (catches gradients → first color)
       function getBgColor(el: Element): string | null {
         const cs = window.getComputedStyle(el);
         const bg = cs.backgroundColor;
         if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return toHex(bg);
-        // Try to extract first color from gradient
         const bgImg = cs.backgroundImage;
         if (bgImg && bgImg !== "none") {
           const m = bgImg.match(/rgba?\([\d,\s.]+\)|#[0-9a-fA-F]{3,6}/);
@@ -160,24 +158,54 @@ export async function extractDom(
         return null;
       }
 
+      // Clean a font-family string to just the primary family name
+      function cleanFont(fontFamily: string): string {
+        return fontFamily.split(",")[0].trim().replace(/['"]/g, "");
+      }
+
       // ═══════════════════════════════════════════════════════════════════════
-      // PHASE 1: SIGNAL COLLECTION
+      // COLOR DISCOVERY
       // ═══════════════════════════════════════════════════════════════════════
 
-      const colorMap = new Map<string, { score: number; sources: string[] }>();
+      const colorMap = new Map<string, { score: number; sources: string[]; totalArea: number }>();
       const pageHeight = document.documentElement.scrollHeight;
+      const pageWidth = document.documentElement.scrollWidth;
 
-      // ── 1a. Meta signals (highest confidence) ──────────────────────────────
+      // ── 1. Area-weighted background scan (most important signal) ───────────
+      // Walk all block-level elements. For each one with a non-transparent
+      // background, record its rendered area. The color covering the most
+      // screen real estate is the dominant brand color.
+      const blockEls = Array.from(document.querySelectorAll(
+        "body, header, nav, main, section, div, article, aside, footer, [class*='hero'], [class*='section'], [class*='banner'], [class*='wrapper'], [class*='container']"
+      ));
 
+      for (const el of blockEls) {
+        const rect = el.getBoundingClientRect();
+        const absTop = rect.top + window.scrollY;
+        const w = rect.width;
+        const h = rect.height;
+        if (w < 200 || h < 50) continue; // skip tiny elements
+        if (absTop > pageHeight) continue; // skip off-page
+        const area = w * h;
+        const bg = getBgColor(el);
+        if (bg) {
+          // Weight by area — larger elements get more score
+          // Normalize: 1 viewport-width × 300px section = score 3
+          const areaScore = Math.min(Math.round(area / (pageWidth * 300)), 5);
+          const tag = el.tagName.toLowerCase();
+          const cls = (el.className ?? "").toString().slice(0, 40);
+          addColorSignal(colorMap, bg, `area:${tag}.${cls}`, Math.max(areaScore, 1), area);
+        }
+      }
+
+      // ── 2. Meta theme-color (explicit brand signal, high weight) ──────────
       const themeColor = document.querySelector('meta[name="theme-color"]')?.getAttribute("content") ?? null;
-      addColorSignal(colorMap, toHex(themeColor ?? ""), "meta:theme-color", 3);
+      addColorSignal(colorMap, toHex(themeColor ?? ""), "meta:theme-color", 5);
 
       const msTile = document.querySelector('meta[name="msapplication-TileColor"]')?.getAttribute("content") ?? null;
-      addColorSignal(colorMap, toHex(msTile ?? ""), "meta:ms-tile", 2);
+      addColorSignal(colorMap, toHex(msTile ?? ""), "meta:ms-tile", 3);
 
-      // ── 1b. CSS variable scan (:root, html, [data-theme]) ──────────────────
-
-      const cssVars: Record<string, string> = {};
+      // ── 3. CSS variables with color-related names ──────────────────────────
       const colorVarPattern = /color|primary|brand|accent|highlight|cta|button|link|main/i;
       for (const sheet of Array.from(document.styleSheets)) {
         try {
@@ -190,13 +218,8 @@ export async function extractDom(
                   if (prop.startsWith("--")) {
                     const val = rule.style.getPropertyValue(prop).trim();
                     if (val.startsWith("#") || val.startsWith("rgb")) {
-                      cssVars[prop] = val;
-                      // Only score vars with color-related names
-                      if (colorVarPattern.test(prop)) {
-                        addColorSignal(colorMap, toHex(val), `cssvar:${prop}`, 3);
-                      } else {
-                        addColorSignal(colorMap, toHex(val), `cssvar:${prop}`, 1);
-                      }
+                      const weight = colorVarPattern.test(prop) ? 4 : 1;
+                      addColorSignal(colorMap, toHex(val), `cssvar:${prop}`, weight);
                     }
                   }
                 }
@@ -206,167 +229,189 @@ export async function extractDom(
         } catch {}
       }
 
-      // ── 1c. CTA buttons (weight 3 — highest DOM signal) ────────────────────
-
-      // AND conditions for CTA: has non-transparent bg, short text, not in nav/footer, in top 70%
-      const allButtons = Array.from(document.querySelectorAll("button, a, [role='button'], input[type='submit'], input[type='button']"));
+      // ── 4. CTA buttons (explicit interactive color signal) ─────────────────
+      const allButtons = Array.from(document.querySelectorAll(
+        "button, a, [role='button'], input[type='submit'], input[type='button']"
+      ));
       for (const el of allButtons) {
         const text = (el.textContent ?? "").trim();
         if (text.length === 0 || text.length > 50) continue;
         const rect = el.getBoundingClientRect();
         const absTop = rect.top + window.scrollY;
-        if (absTop > pageHeight * 0.75) continue; // not in bottom 25%
-        if (el.closest("nav, header nav")) continue; // not a nav link
+        if (absTop > pageHeight * 0.75) continue;
+        if (el.closest("nav, header nav")) continue;
         if (el.closest("footer")) continue;
         const bg = getBgColor(el);
-        if (bg && !isNeutral(bg)) {
+        if (bg) {
           addColorSignal(colorMap, bg, "cta:background", 3);
-          // Also read text color of CTA
           const textHex = toHex(window.getComputedStyle(el).color);
-          if (textHex && !isNeutral(textHex)) addColorSignal(colorMap, textHex, "cta:text", 1);
+          if (textHex) addColorSignal(colorMap, textHex, "cta:text", 1);
         }
       }
 
-      // ── 1d. H1 color (weight 2) ────────────────────────────────────────────
-
-      // AND conditions: font-size ≥ 24px, not in nav/footer, in top 60% of page
-      const allH1 = Array.from(document.querySelectorAll("h1, [role='heading'][aria-level='1']"));
-      let validatedH1: Element | null = null;
-      for (const el of allH1) {
-        const cs = window.getComputedStyle(el);
-        const fs = parseFloat(cs.fontSize);
-        if (fs < 24) continue;
-        if (el.closest("nav, footer, aside")) continue;
-        const rect = el.getBoundingClientRect();
-        const absTop = rect.top + window.scrollY;
-        if (absTop > pageHeight * 0.65) continue;
-        validatedH1 = el;
-        const textHex = toHex(cs.color);
-        if (textHex && !isNeutral(textHex)) addColorSignal(colorMap, textHex, "h1:color", 2);
-        break;
-      }
-
-      // ── 1e. H2 color (weight 1) ────────────────────────────────────────────
-
-      const h2 = document.querySelector("h2");
-      if (h2 && !h2.closest("nav, footer")) {
-        const textHex = toHex(window.getComputedStyle(h2).color);
-        if (textHex && !isNeutral(textHex)) addColorSignal(colorMap, textHex, "h2:color", 1);
-      }
-
-      // ── 1f. Nav/header background (weight 2) ───────────────────────────────
-
+      // ── 5. Nav/header background ───────────────────────────────────────────
       const navEl = document.querySelector("header, nav, [role='navigation']");
       if (navEl) {
         const bg = getBgColor(navEl);
-        if (bg && !isNeutral(bg)) addColorSignal(colorMap, bg, "nav:background", 2);
+        if (bg) addColorSignal(colorMap, bg, "nav:background", 3);
+        const textHex = toHex(window.getComputedStyle(navEl).color);
+        if (textHex) addColorSignal(colorMap, textHex, "nav:text", 1);
       }
 
-      // ── 1g. Hero/first section background (weight 2) ───────────────────────
-
-      const heroSelectors = [
-        "[class*='hero']", "[class*='Hero']", "[id*='hero']",
-        "section:first-of-type", "main > div:first-child", "main > section:first-child",
-      ];
-      for (const sel of heroSelectors) {
-        const el = document.querySelector(sel);
-        if (!el) continue;
-        const bg = getBgColor(el);
-        if (bg && !isNeutral(bg)) {
-          addColorSignal(colorMap, bg, "hero:background", 2);
-          break;
-        }
+      // ── 6. H1 text color ──────────────────────────────────────────────────
+      for (const el of Array.from(document.querySelectorAll("h1"))) {
+        if (el.closest("nav, footer, aside")) continue;
+        const absTop = el.getBoundingClientRect().top + window.scrollY;
+        if (absTop > pageHeight * 0.65) continue;
+        const textHex = toHex(window.getComputedStyle(el).color);
+        if (textHex) addColorSignal(colorMap, textHex, "h1:color", 2);
+        break;
       }
 
-      // ── 1h. Footer background (weight 1) ───────────────────────────────────
+      // ── 7. H2 text color ──────────────────────────────────────────────────
+      const h2 = document.querySelector("h2");
+      if (h2 && !h2.closest("nav, footer")) {
+        const textHex = toHex(window.getComputedStyle(h2).color);
+        if (textHex) addColorSignal(colorMap, textHex, "h2:color", 1);
+      }
 
+      // ── 8. Footer background ──────────────────────────────────────────────
       const footer = document.querySelector("footer");
       if (footer) {
         const bg = getBgColor(footer);
-        if (bg && !isNeutral(bg)) addColorSignal(colorMap, bg, "footer:background", 1);
+        if (bg) addColorSignal(colorMap, bg, "footer:background", 2);
       }
 
-      // ── 1i. Accent elements: badges, tags, highlights (weight 2) ──────────
-
-      const accentSelectors = [
+      // ── 9. Accent/badge elements ──────────────────────────────────────────
+      for (const sel of [
         "[class*='badge']", "[class*='tag']", "[class*='chip']", "[class*='pill']",
-        "[class*='label']", "[class*='highlight']", "[class*='accent']",
-        "mark", "strong", "[class*='primary']",
-      ];
-      for (const sel of accentSelectors) {
+        "[class*='label']", "[class*='highlight']", "[class*='accent']", "mark",
+      ]) {
         const el = document.querySelector(sel);
         if (!el) continue;
         const bg = getBgColor(el);
-        if (bg && !isNeutral(bg)) addColorSignal(colorMap, bg, `accent:${sel}`, 2);
+        if (bg) addColorSignal(colorMap, bg, `accent:${sel}`, 2);
         const textHex = toHex(window.getComputedStyle(el).color);
-        if (textHex && !isNeutral(textHex)) addColorSignal(colorMap, textHex, `accent-text:${sel}`, 1);
+        if (textHex) addColorSignal(colorMap, textHex, `accent-text:${sel}`, 1);
       }
 
-      // ── 1j. Link color (weight 1) ──────────────────────────────────────────
-
+      // ── 10. Link color ────────────────────────────────────────────────────
       const firstLink = document.querySelector("main a, article a, section a");
       if (firstLink) {
         const textHex = toHex(window.getComputedStyle(firstLink).color);
-        if (textHex && !isNeutral(textHex)) addColorSignal(colorMap, textHex, "link:color", 1);
+        if (textHex) addColorSignal(colorMap, textHex, "link:color", 1);
       }
 
-      // ── 1k. Body/page background (separate track — neutrals allowed) ────────
+      // Build scored palette — sorted by score desc, then area desc
+      const scoredPalette = Array.from(colorMap.entries())
+        .sort((a, b) => {
+          if (b[1].score !== a[1].score) return b[1].score - a[1].score;
+          return b[1].totalArea - a[1].totalArea;
+        })
+        .slice(0, 12)
+        .map(([hex, { score, sources, totalArea }]) => ({ hex, score, sources, totalArea }));
 
-      const bodyBg = getBgColor(document.body) ?? toHex(window.getComputedStyle(document.documentElement).backgroundColor);
-
-      // ═══════════════════════════════════════════════════════════════════════
-      // PHASE 2: CROSS-VALIDATION SCORING → ranked brand colors
-      // ═══════════════════════════════════════════════════════════════════════
-
-      const rankedColors = Array.from(colorMap.entries())
-        .filter(([hex]) => !isNeutral(hex))
-        .sort((a, b) => b[1].score - a[1].score);
-
-      const brandPrimary = rankedColors[0]?.[0] ?? null;
-      const brandSecondary = rankedColors.find(([hex]) => !colorsSimilar(hex, brandPrimary ?? ""))?.[0] ?? null;
-      const accentColor = rankedColors.find(
-        ([hex]) => !colorsSimilar(hex, brandPrimary ?? "") && !colorsSimilar(hex, brandSecondary ?? "")
-      )?.[0] ?? null;
-
-      // Full scored palette for debugging
-      const scoredPalette = rankedColors.slice(0, 8).map(([hex, { score, sources }]) => ({ hex, score, sources }));
+      // Page background color (body)
+      const bodyBg = getBgColor(document.body) ??
+        toHex(window.getComputedStyle(document.documentElement).backgroundColor);
 
       // ═══════════════════════════════════════════════════════════════════════
-      // PHASE 3: AND-VALIDATED ELEMENT READS
+      // FONT DISCOVERY
       // ═══════════════════════════════════════════════════════════════════════
 
-      // ── 3a. Logo (AND-validated) ───────────────────────────────────────────
+      const fontMap = new Map<string, string[]>(); // family → elements seen on
 
-      type LogoResult = { type: string; src?: string; alt?: string; width?: number; height?: number; outerHTML?: string; confidence: string };
+      function recordFont(family: string, elementLabel: string) {
+        const clean = family.split(",")[0].trim().replace(/['"]/g, "");
+        // Skip system/generic fallbacks
+        if (!clean || /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|BlinkMacSystemFont|Segoe UI|Arial|Helvetica|Times|Georgia|Courier)$/i.test(clean)) return;
+        const existing = fontMap.get(clean);
+        if (existing) {
+          if (!existing.includes(elementLabel)) existing.push(elementLabel);
+        } else {
+          fontMap.set(clean, [elementLabel]);
+        }
+      }
+
+      // Read font from each key element type
+      const fontTargets: Array<{ sel: string; label: string }> = [
+        { sel: "h1", label: "h1" },
+        { sel: "h2", label: "h2" },
+        { sel: "h3", label: "h3" },
+        { sel: "p", label: "body-p" },
+        { sel: "body", label: "body" },
+        { sel: "nav a, header a", label: "nav-link" },
+        { sel: "button, a[class*='btn'], input[type='submit']", label: "button" },
+        { sel: "footer", label: "footer" },
+        { sel: "li", label: "list-item" },
+        { sel: "label, input, select", label: "form" },
+        { sel: "blockquote", label: "blockquote" },
+        { sel: "[class*='hero'] p, [class*='hero'] h1", label: "hero-text" },
+      ];
+
+      for (const { sel, label } of fontTargets) {
+        try {
+          const el = document.querySelector(sel);
+          if (!el) continue;
+          const cs = window.getComputedStyle(el);
+          recordFont(cs.fontFamily, label);
+        } catch {}
+      }
+
+      // Also scan all headings to catch font variations
+      for (const el of Array.from(document.querySelectorAll("h1, h2, h3, h4")).slice(0, 10)) {
+        const cs = window.getComputedStyle(el);
+        recordFont(cs.fontFamily, el.tagName.toLowerCase());
+      }
+
+      const discoveredFonts = Array.from(fontMap.entries()).map(([family, seenOn]) => ({
+        family,
+        seenOn,
+      }));
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LOGO DISCOVERY (AND-validated)
+      // ═══════════════════════════════════════════════════════════════════════
+
+      type LogoResult = {
+        type: string;
+        src?: string;
+        alt?: string;
+        width?: number;
+        height?: number;
+        outerHTML?: string;
+        confidence: string;
+      };
       let logo: LogoResult | null = null;
 
-      // Try img first: must be in header/nav, small dimensions (logo not photo), not data URI
-      const navImgs = Array.from(document.querySelectorAll("header img, nav img, [class*='logo'] img, [id*='logo'] img, [class*='brand'] img"));
+      const navImgs = Array.from(document.querySelectorAll(
+        "header img, nav img, [class*='logo'] img, [id*='logo'] img, [class*='brand'] img"
+      ));
       for (const el of navImgs) {
         const img = el as HTMLImageElement;
         const w = img.naturalWidth;
         const h = img.naturalHeight;
         const src = img.src ?? "";
         if (!src || src.startsWith("data:")) continue;
-        if (w === 0 || h === 0) continue; // not loaded
-        if (w > 600 || h > 300) continue; // too large to be a logo
+        if (w === 0 || h === 0) continue;
+        if (w > 600 || h > 300) continue;
         if (src.includes("background") || src.includes("hero") || src.includes("banner")) continue;
         logo = { type: "img", src, alt: img.alt, width: w, height: h, confidence: "high" };
         break;
       }
 
-      // Try inline SVG if no img found
       if (!logo) {
-        const navSvgs = Array.from(document.querySelectorAll("header svg, nav svg, [class*='logo'] svg, [id*='logo'] svg"));
+        const navSvgs = Array.from(document.querySelectorAll(
+          "header svg, nav svg, [class*='logo'] svg, [id*='logo'] svg"
+        ));
         for (const el of navSvgs) {
           const rect = el.getBoundingClientRect();
-          if (rect.width > 400 || rect.height > 200) continue; // too large
+          if (rect.width > 400 || rect.height > 200) continue;
           logo = { type: "svg", outerHTML: el.outerHTML.slice(0, 800), confidence: "high" };
           break;
         }
       }
 
-      // Fallback: any img in top 15% of page that's small
       if (!logo) {
         const topImgs = Array.from(document.querySelectorAll("img")).filter((img) => {
           const rect = img.getBoundingClientRect();
@@ -379,152 +424,62 @@ export async function extractDom(
         }
       }
 
-      // ── 3b. Typography (AND-validated) ────────────────────────────────────
-
-      function readTypo(el: Element) {
-        const cs = window.getComputedStyle(el);
-        return {
-          fontFamily: cs.fontFamily,
-          fontSize: cs.fontSize,
-          fontWeight: cs.fontWeight,
-          lineHeight: cs.lineHeight,
-          letterSpacing: cs.letterSpacing,
-          textTransform: cs.textTransform,
-          color: toHex(cs.color),
-        };
-      }
-
-      const h1Typo = validatedH1 ? readTypo(validatedH1) : null;
-
-      // Body font: first <p> not in nav/header/footer with real text
-      let bodyTypo = null;
-      for (const p of Array.from(document.querySelectorAll("p"))) {
-        if (p.closest("nav, header, footer")) continue;
-        if ((p.textContent ?? "").trim().length < 20) continue;
-        bodyTypo = readTypo(p);
-        break;
-      }
-
-      // CTA font: from the first AND-validated CTA button
-      let ctaTypo = null;
-      for (const el of allButtons) {
-        const text = (el.textContent ?? "").trim();
-        if (text.length === 0 || text.length > 50) continue;
-        const rect = el.getBoundingClientRect();
-        const absTop = rect.top + window.scrollY;
-        if (absTop > pageHeight * 0.75) continue;
-        if (el.closest("nav, header nav, footer")) continue;
-        const bg = getBgColor(el);
-        if (bg && !isNeutral(bg)) {
-          ctaTypo = readTypo(el);
-          break;
-        }
-      }
-
-      // ── 3c. Border radii ───────────────────────────────────────────────────
-
-      const borderRadii: string[] = [];
-      for (const el of allButtons.slice(0, 5)) {
-        const r = window.getComputedStyle(el).borderRadius;
-        if (r && r !== "0px") borderRadii.push(r);
-      }
-      for (const sel of ["[class*='card']", "input", "img"]) {
-        const el = document.querySelector(sel);
-        if (el) {
-          const r = window.getComputedStyle(el).borderRadius;
-          if (r && r !== "0px") borderRadii.push(r);
-        }
-      }
-
-      // ── 3d. Stats (AND-validated) ──────────────────────────────────────────
-
-      // AND conditions:
-      // - Contains a numeric value (with optional suffix: %, +, k, M, x, $)
-      // - Paired with short descriptive text (< 60 chars) in the same container
-      // - At least 2 such pairs exist in the same parent container (it's a stats block)
+      // ═══════════════════════════════════════════════════════════════════════
+      // STATS DISCOVERY (AND-validated)
+      // ═══════════════════════════════════════════════════════════════════════
 
       type StatResult = { value: string; label: string };
       const stats: StatResult[] = [];
       const numericPattern = /^\$?[\d,]+(\.\d+)?[%+kKmMxX]?$|^[\d,]+(\.\d+)?(\s*(million|billion|thousand|%|\+|x))?$/i;
 
-      // Walk all elements, look for numeric text nodes paired with sibling/child descriptors
       const candidates: Array<{ value: string; label: string; parent: Element }> = [];
-      const allEls = Array.from(document.querySelectorAll("*"));
-      for (const el of allEls) {
-        // Skip nav, footer, form elements
-        if (el.closest("nav, footer, form, input, button, script, style")) continue;
+      for (const el of Array.from(document.querySelectorAll("*"))) {
+        if (el.closest("nav, footer, form, script, style")) continue;
         const children = Array.from(el.children);
         if (children.length < 2) continue;
-
-        // Look for a child with numeric text and a sibling with label text
         let numericChild: Element | null = null;
         let labelChild: Element | null = null;
         for (const child of children) {
           const text = (child.textContent ?? "").trim();
-          if (numericPattern.test(text) && text.length < 20) {
-            numericChild = child;
-          } else if (text.length > 2 && text.length < 80 && !numericPattern.test(text)) {
-            labelChild = child;
-          }
+          if (numericPattern.test(text) && text.length < 20) numericChild = child;
+          else if (text.length > 2 && text.length < 80 && !numericPattern.test(text)) labelChild = child;
         }
         if (numericChild && labelChild) {
-          candidates.push({
-            value: (numericChild.textContent ?? "").trim(),
-            label: (labelChild.textContent ?? "").trim(),
-            parent: el.parentElement ?? el,
-          });
+          candidates.push({ value: (numericChild.textContent ?? "").trim(), label: (labelChild.textContent ?? "").trim(), parent: el.parentElement ?? el });
         }
       }
-
-      // AND condition: at least 2 pairs in the same parent = it's a stats block
       const parentCounts = new Map<Element, number>();
+      for (const c of candidates) parentCounts.set(c.parent, (parentCounts.get(c.parent) ?? 0) + 1);
       for (const c of candidates) {
-        parentCounts.set(c.parent, (parentCounts.get(c.parent) ?? 0) + 1);
-      }
-      for (const c of candidates) {
-        if ((parentCounts.get(c.parent) ?? 0) >= 2) {
-          if (!stats.find((s) => s.value === c.value)) {
-            stats.push({ value: c.value, label: c.label });
-          }
+        if ((parentCounts.get(c.parent) ?? 0) >= 2 && !stats.find((s) => s.value === c.value)) {
+          stats.push({ value: c.value, label: c.label });
         }
         if (stats.length >= 6) break;
       }
 
-      // ── 3e. Testimonials (AND-validated) ──────────────────────────────────
-
-      // AND conditions:
-      // - Extended text (> 60 chars, < 500 chars) — the quote
-      // - Paired with short attribution text (< 60 chars) in the same container
-      // - Attribution contains a name pattern (capitalized words, comma, dash, or "—")
-      // - Not a product description or nav element
+      // ═══════════════════════════════════════════════════════════════════════
+      // TESTIMONIALS DISCOVERY (AND-validated)
+      // ═══════════════════════════════════════════════════════════════════════
 
       type TestimonialResult = { quote: string; author: string };
       const testimonials: TestimonialResult[] = [];
       const attributionPattern = /^[A-Z][a-z]+(\s[A-Z][a-z]+)*[,\s—\-]|CEO|Founder|Director|Manager|Co-founder/;
 
-      for (const el of allEls) {
+      for (const el of Array.from(document.querySelectorAll("*"))) {
         if (el.closest("nav, footer, form, script, style")) continue;
         const children = Array.from(el.children);
         if (children.length < 2) continue;
-
         let quoteChild: Element | null = null;
         let authorChild: Element | null = null;
-
         for (const child of children) {
           const text = (child.textContent ?? "").trim();
-          if (text.length > 60 && text.length < 500 && !numericPattern.test(text.slice(0, 10))) {
-            quoteChild = child;
-          } else if (text.length > 3 && text.length < 80 && attributionPattern.test(text)) {
-            authorChild = child;
-          }
+          if (text.length > 60 && text.length < 500 && !numericPattern.test(text.slice(0, 10))) quoteChild = child;
+          else if (text.length > 3 && text.length < 80 && attributionPattern.test(text)) authorChild = child;
         }
-
         if (quoteChild && authorChild) {
           const quote = (quoteChild.textContent ?? "").trim().replace(/^["'"']|["'"']$/g, "");
           const author = (authorChild.textContent ?? "").trim();
-          if (!testimonials.find((t) => t.quote === quote)) {
-            testimonials.push({ quote, author });
-          }
+          if (!testimonials.find((t) => t.quote === quote)) testimonials.push({ quote, author });
         }
         if (testimonials.length >= 4) break;
       }
@@ -539,7 +494,7 @@ export async function extractDom(
         nav: Array.from(document.querySelectorAll("nav a")).map((el) => el.textContent?.trim() ?? "").filter(Boolean).slice(0, 10),
         cta: allButtons.filter((el) => {
           const text = (el.textContent ?? "").trim();
-          return text.length > 0 && text.length <= 50 && !el.closest("nav header nav");
+          return text.length > 0 && text.length <= 50;
         }).map((el) => el.textContent?.trim() ?? "").filter(Boolean).slice(0, 5),
       };
       const bodySnippet = document.body.innerText.slice(0, 3000);
@@ -551,7 +506,6 @@ export async function extractDom(
       const genericNames = ["my site", "home", "website", "untitled", "wix site"];
       const brandName = genericNames.includes(rawSiteName.toLowerCase()) ? "" : rawSiteName;
 
-      // Photography: large images not in nav/header, not logos/icons
       const images = Array.from(document.querySelectorAll("img"))
         .filter((img) => {
           if (img.naturalWidth < 200 || img.naturalHeight < 200) return false;
@@ -581,7 +535,6 @@ export async function extractDom(
         .filter(Boolean)
         .slice(0, 5) as string[];
 
-      // Spatial
       function spatialFor(selector: string) {
         const el = document.querySelector(selector);
         if (!el) return null;
@@ -592,16 +545,21 @@ export async function extractDom(
           paddingBottom: cs.paddingBottom,
           paddingLeft: cs.paddingLeft,
           paddingRight: cs.paddingRight,
-          marginTop: cs.marginTop,
-          marginBottom: cs.marginBottom,
           avgPadding: (parseVal(cs.paddingTop) + parseVal(cs.paddingBottom) + parseVal(cs.paddingLeft) + parseVal(cs.paddingRight)) / 4,
           avgMargin: (parseVal(cs.marginTop) + parseVal(cs.marginBottom)) / 2,
         };
       }
       const spatial = spatialFor("body") ?? spatialFor("section") ?? { avgPadding: 16, avgMargin: 8 };
 
+      // Border radii
+      const borderRadii: string[] = [];
+      for (const el of allButtons.slice(0, 5)) {
+        const r = window.getComputedStyle(el).borderRadius;
+        if (r && r !== "0px") borderRadii.push(r);
+      }
+
       // ═══════════════════════════════════════════════════════════════════════
-      // PHASE 4: OUTPUT
+      // OUTPUT
       // ═══════════════════════════════════════════════════════════════════════
 
       return {
@@ -611,17 +569,15 @@ export async function extractDom(
         ogTitle,
         ogImage,
         favicon,
-        // Scored color output
-        brandPrimary,
-        brandSecondary,
-        accentColor,
-        backgroundColor: bodyBg,
+        // Color discovery output — classification happens in classifyVisual.ts
         scoredPalette,
+        backgroundColor: bodyBg,
+        // Font discovery output — classification happens in classifyVisual.ts
+        discoveredFonts,
         // Validated elements
         logo,
-        typography: { h1: h1Typo, body: bodyTypo, cta: ctaTypo },
         borderRadii,
-        // Content signals
+        // Content
         copyText,
         bodySnippet,
         stats,
@@ -629,11 +585,8 @@ export async function extractDom(
         // Photography
         images,
         bgImages,
-        // Raw CSS vars for classifyBrand to use
-        cssVars,
-        // Spatial
         spatial,
-        // Legacy fields for backward compat
+        // Legacy compat fields
         colorSamples: scoredPalette.map((c) => ({ hex: c.hex, contexts: c.sources, count: c.score })),
         logoImgs: logo?.type === "img" ? [{ src: logo.src, alt: logo.alt, width: logo.width, height: logo.height }] : [],
         logoSvgs: logo?.type === "svg" ? [{ type: "inline-svg", outerHTML: logo.outerHTML }] : [],
@@ -644,7 +597,12 @@ export async function extractDom(
     const rawPath = path.join(workDir, "raw_dom_data.json");
     fs.writeFileSync(rawPath, JSON.stringify(raw, null, 2));
 
-    return raw as Record<string, unknown>;
+    // Attach screenshot paths to raw output for downstream use
+    return {
+      ...(raw as Record<string, unknown>),
+      screenshotPath,
+      viewportScreenshotPath,
+    };
   } finally {
     console.log("[extractDom] Closing browser...");
     await browser.close();

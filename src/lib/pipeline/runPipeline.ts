@@ -13,6 +13,7 @@ import * as http from "http";
 import { execSync } from "child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { classifyBrand, type BrandProfile } from "./classifyBrand";
+import { classifyVisual } from "./classifyVisual";
 import type { EmitFn } from "./types";
 import { generateHtml } from "./generateHtml";
 import { validateHtml } from "./guardrails";
@@ -354,13 +355,47 @@ export async function runFullPipeline(
 ): Promise<{ brandProfile: BrandProfile; images: ImageResult[] }> {
   fs.mkdirSync(workDir, { recursive: true });
 
-  // Step 1: DOM extraction
+  // Step 1: DOM extraction (discovery only — no classification)
   const raw = await extractDom(url, workDir, emit);
 
-  // Step 2: Brand classification
-  emit({ type: "status", step: 2, total: 5, message: "Classifying brand identity..." });
+  // Step 1b: Visual classification — Claude Vision classifies scoredPalette colors
+  // and discoveredFonts by semantic role (primary/secondary/accent/structural, heading/body/ui)
+  emit({ type: "status", step: 2, total: 5, message: "Classifying brand colors and fonts..." });
+  console.log("[pipeline] Starting classifyVisual...");
+  const visualClassification = await classifyVisual(
+    (raw.viewportScreenshotPath as string) ?? "",
+    (raw.scoredPalette as Array<{ hex: string; score: number; sources: string[]; totalArea?: number }>) ?? [],
+    (raw.discoveredFonts as Array<{ family: string; seenOn: string[] }>) ?? []
+  );
+  console.log("[pipeline] classifyVisual complete:", {
+    brandPrimary: visualClassification.brandPrimary,
+    brandSecondary: visualClassification.brandSecondary,
+    accentColor: visualClassification.accentColor,
+    headingFont: visualClassification.headingFont,
+    bodyFont: visualClassification.bodyFont,
+  });
+  fs.writeFileSync(
+    path.join(workDir, "visual_classification.json"),
+    JSON.stringify(visualClassification, null, 2)
+  );
+
+  // Merge visual classification into raw DOM data so classifyBrand receives
+  // pre-classified colors and fonts — it no longer needs to infer them
+  const rawWithClassification = {
+    ...raw,
+    brandPrimary: visualClassification.brandPrimary,
+    brandSecondary: visualClassification.brandSecondary,
+    accentColor: visualClassification.accentColor,
+    headingFont: visualClassification.headingFont,
+    bodyFont: visualClassification.bodyFont,
+    uiFont: visualClassification.uiFont,
+    classifiedColors: visualClassification.colors,
+    classifiedFonts: visualClassification.fonts,
+  };
+
+  // Step 2: Brand classification (tone, personality, industry, photography — NOT colors/fonts)
   console.log("[pipeline] Starting classifyBrand...");
-  const brandProfile = await classifyBrand(raw);
+  const brandProfile = await classifyBrand(rawWithClassification);
   console.log("[pipeline] classifyBrand complete");
   fs.writeFileSync(
     path.join(workDir, "brand_profile.json"),
