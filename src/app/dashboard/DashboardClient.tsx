@@ -1,7 +1,7 @@
 "use client";
-
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -687,6 +687,7 @@ export default function DashboardClient({ user, generations: initialGenerations,
   );
   const [showNewModal, setShowNewModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [generationEvents, setGenerationEvents] = useState<Array<{
     type: string; message?: string; schemaId?: string; schemaName?: string; url?: string; size?: string;
   }>>([]);
@@ -855,18 +856,49 @@ export default function DashboardClient({ user, generations: initialGenerations,
 
         <div style={{ flex: 1 }} />
 
-        {/* User avatar */}
-        <div
-          title={user.email}
-          style={{
-            width: 30, height: 30, borderRadius: "50%",
-            background: "linear-gradient(135deg, var(--brand-primary), rgba(0,212,170,0.4))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 700, color: "#000", cursor: "pointer",
-            letterSpacing: "0.02em",
-          }}
-        >
-          {user.initials}
+        {/* User avatar + dropdown */}
+        <div style={{ position: "relative" }}>
+          <div
+            onClick={() => setShowUserMenu((v) => !v)}
+            title={user.email}
+            style={{
+              width: 30, height: 30, borderRadius: "50%",
+              background: "linear-gradient(135deg, var(--brand-primary), rgba(0,212,170,0.4))",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 10, fontWeight: 700, color: "#000", cursor: "pointer",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {user.initials}
+          </div>
+          {showUserMenu && (
+            <div
+              style={{
+                position: "absolute", bottom: 40, left: 0,
+                background: "var(--surface-elevated)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 8, padding: "4px 0", minWidth: 180,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                zIndex: 100,
+              }}
+            >
+              <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-tertiary)", borderBottom: "1px solid var(--border-subtle)", marginBottom: 4 }}>
+                {user.email}
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "8px 12px", fontSize: 12, color: "var(--text-secondary)",
+                  background: "none", border: "none", cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
