@@ -54,8 +54,6 @@ export async function uploadToR2(filePath: string, key: string): Promise<string>
       Key: key,
       Body: body,
       ContentType: contentType,
-      // Allow public read via the public development URL
-      ACL: "public-read",
     })
   );
 
