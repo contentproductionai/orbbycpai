@@ -10,6 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
 import * as http from "http";
+import { execSync } from "child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { classifyBrand, type BrandProfile } from "./classifyBrand";
 import { generateHtml } from "./generateHtml";
@@ -20,6 +21,27 @@ import {
   selectSchemas,
   type Schema,
 } from "./schemas";
+
+// ─── Chromium path resolution ────────────────────────────────────────────────
+
+function getChromiumPath(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  // Try to find system Chromium in PATH (e.g. Nix-installed on Railway)
+  for (const bin of ["chromium", "chromium-browser", "google-chrome", "google-chrome-stable"]) {
+    try {
+      const p = execSync(`which ${bin}`, { encoding: "utf8" }).trim();
+      if (p) {
+        console.log(`[Puppeteer] Found browser at: ${p}`);
+        return p;
+      }
+    } catch {}
+  }
+  // Fall back to Puppeteer's bundled Chrome
+  console.log("[Puppeteer] Using bundled Chrome");
+  return undefined;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,7 +111,7 @@ export async function extractDom(
 
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    executablePath: getChromiumPath(),
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -547,7 +569,7 @@ export async function renderSizes(
 ): Promise<Record<string, string>> {
   const browser: Browser = await puppeteer.launch({
     headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    executablePath: getChromiumPath(),
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
