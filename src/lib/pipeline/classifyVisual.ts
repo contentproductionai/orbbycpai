@@ -5,12 +5,21 @@
  *
  * Receives:
  *   - A viewport screenshot of the website (JPEG, ~100-200kb)
- *   - scoredPalette: colors discovered by DOM scan, with sources
- *   - discoveredFonts: font families discovered by DOM scan, with elements seen on
+ *   - scoredPalette: colors discovered by DOM scan, with sources and scores
+ *   - discoveredFonts: font families discovered by DOM scan, ranked by score
+ *   - fontElementMap: per-element font assignments from the DOM
+ *     e.g. { h1: "Poppins", h2: "Poppins", body: "Open Sans", footer: "Open Sans" }
+ *
+ * Claude's job for fonts:
+ *   - Receive the per-element map showing what the DOM says each element uses
+ *   - Look at the screenshot and confirm or correct each assignment
+ *   - Body/footer are low-signal (theme defaults) — if the screenshot shows
+ *     something different, Claude's visual read wins
+ *   - Assign semantic roles: heading | body | ui | unknown
  *
  * Returns:
- *   - colors: each palette entry tagged with a semantic role (primary | secondary | accent | structural)
- *   - fonts: each font tagged with a semantic role (heading | body | ui | unknown)
+ *   - colors: each palette entry tagged with a semantic role
+ *   - fonts: each font tagged with a semantic role
  *   - brandPrimary, brandSecondary, accentColor: top-scored color per role
  *   - headingFont, bodyFont, uiFont: font per role
  */
@@ -28,6 +37,7 @@ export interface ScoredColor {
 export interface DiscoveredFont {
   family: string;
   seenOn: string[];
+  score?: number;
 }
 
 export interface ClassifiedColor extends ScoredColor {
@@ -52,7 +62,8 @@ export interface VisualClassification {
 export async function classifyVisual(
   viewportScreenshotPath: string,
   scoredPalette: ScoredColor[],
-  discoveredFonts: DiscoveredFont[]
+  discoveredFonts: DiscoveredFont[],
+  fontElementMap: Record<string, string | null> = {}
 ): Promise<VisualClassification> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -73,8 +84,39 @@ export async function classifyVisual(
     2
   );
 
-  const fontsJson = JSON.stringify(
-    discoveredFonts.map((f) => ({ family: f.family, seenOn: f.seenOn })),
+  // Build a readable per-element font table for Claude
+  // Separate high-signal content elements from low-signal structural ones
+  const highSignalElements = ["h1", "h2", "h3", "h4", "p", "li", "blockquote"];
+  const lowSignalElements = ["body", "footer"];
+
+  const highSignalRows = highSignalElements
+    .filter((el) => fontElementMap[el] !== undefined)
+    .map((el) => `  ${el}: ${fontElementMap[el] ?? "(only system fonts)"}`)
+    .join("\n");
+
+  const lowSignalRows = lowSignalElements
+    .filter((el) => fontElementMap[el] !== undefined)
+    .map((el) => `  ${el}: ${fontElementMap[el] ?? "(only system fonts)"}`)
+    .join("\n");
+
+  const otherRows = Object.entries(fontElementMap)
+    .filter(([el]) => !highSignalElements.includes(el) && !lowSignalElements.includes(el))
+    .map(([el, fam]) => `  ${el}: ${fam ?? "(only system fonts)"}`)
+    .join("\n");
+
+  const fontElementSection = [
+    "HIGH-SIGNAL content elements (h1-h4, p, li, blockquote — what users actually read):",
+    highSignalRows || "  (none found)",
+    "",
+    "MEDIUM-SIGNAL interactive elements (nav, button, form):",
+    otherRows || "  (none found)",
+    "",
+    "LOW-SIGNAL structural elements (body, footer — often theme defaults, frequently overridden):",
+    lowSignalRows || "  (none found)",
+  ].join("\n");
+
+  const rankedFontsJson = JSON.stringify(
+    discoveredFonts.map((f) => ({ family: f.family, score: f.score ?? 0, seenOn: f.seenOn })),
     null,
     2
   );
@@ -83,37 +125,56 @@ export async function classifyVisual(
 
 You will be given:
 1. A screenshot of the website's above-the-fold viewport
-2. A scoredPalette: colors discovered from the website's DOM, with the elements they came from and a score
-3. discoveredFonts: font families found in the DOM, with the elements they appeared on
+2. scoredPalette: colors discovered from the DOM, with scores and source elements
+3. fontElementMap: what the DOM's computed styles say each element type uses
+4. rankedFonts: all discovered font families ranked by how often they appear on content elements
 
-Your job is CLASSIFICATION ONLY. Do not invent new colors or fonts. Only classify what is in the lists.
+Your job is CLASSIFICATION ONLY. Do not invent new colors or fonts.
 
-For each color in scoredPalette, assign exactly one semantic role:
-- "primary": The dominant brand color that defines the visual identity. Usually the most visually prominent non-white, non-black color. For a dark-themed site this may be a dark color. For a light-themed site this is typically a saturated color used in key brand moments.
-- "secondary": A supporting brand color used alongside the primary. Often a lighter or darker variant, or a complementary color.
-- "accent": A high-contrast color used for CTAs, highlights, or interactive elements. Often the most saturated or vibrant color on the page.
-- "structural": White, black, near-white, near-black, or gray used purely for layout/text — not a brand color.
-
-For each font in discoveredFonts, assign exactly one semantic role:
-- "heading": Used for H1, H2, H3 — the display/title font
-- "body": Used for paragraphs, body text
-- "ui": Used for buttons, nav links, labels, form elements
-- "unknown": Cannot determine
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COLOR CLASSIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For each color in scoredPalette, assign exactly one role:
+- "primary": The dominant brand color defining the visual identity. Most visually prominent non-white, non-black color.
+- "secondary": A supporting brand color used alongside the primary.
+- "accent": High-contrast color for CTAs, highlights, interactive elements.
+- "structural": White, black, near-white, near-black, or gray used for layout/text only.
 
 Rules:
-- Every color must get exactly one role. Do not skip any.
-- Every font must get exactly one role. Do not skip any.
-- If two colors could both be "primary", pick the one that is most visually dominant in the screenshot.
-- If unsure between "primary" and "secondary", prefer "secondary" — only one color should be "primary".
-- White (#ffffff or near-white) and black (#000000 or near-black) are almost always "structural" unless the entire site is monochromatic.
+- Every color must get exactly one role.
+- Only one color should be "primary".
+- White and black are almost always "structural" unless the site is monochromatic.
+- Use the screenshot to break ties — the most visually dominant non-neutral color is "primary".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONT CLASSIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The fontElementMap shows what the DOM says each element uses.
+HIGH-SIGNAL elements (h1-h4, p, li) are reliable — they reflect what users actually read.
+LOW-SIGNAL elements (body, footer) are often WordPress/theme defaults that get overridden everywhere.
+
+Your task:
+1. Look at the screenshot. What font do the visible headings (H1, H2, H3) actually use?
+2. What font does the body/paragraph text actually use?
+3. If the screenshot shows a font that contradicts a LOW-SIGNAL DOM entry, trust the screenshot.
+4. If the screenshot confirms a HIGH-SIGNAL DOM entry, use that.
+5. Assign each font in rankedFonts exactly one role: "heading" | "body" | "ui" | "unknown".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INPUT DATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 scoredPalette:
 ${paletteJson}
 
-discoveredFonts:
-${fontsJson}
+fontElementMap (DOM computed styles per element type):
+${fontElementSection}
 
-Respond with ONLY valid JSON in this exact format, no explanation:
+rankedFonts (all discovered fonts, ranked by content-element frequency):
+${rankedFontsJson}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Respond with ONLY valid JSON, no explanation:
 {
   "colors": [
     { "hex": "#xxxxxx", "role": "primary|secondary|accent|structural" }
@@ -149,7 +210,7 @@ Respond with ONLY valid JSON in this exact format, no explanation:
       // No screenshot — text-only fallback
       messages.push({
         role: "user",
-        content: prompt + "\n\n(No screenshot available — classify based on source labels only.)",
+        content: prompt + "\n\n(No screenshot available — classify based on DOM data only.)",
       });
     }
 
@@ -162,7 +223,6 @@ Respond with ONLY valid JSON in this exact format, no explanation:
     responseText = (response.content[0] as { text: string }).text.trim();
   } catch (e) {
     console.error("[classifyVisual] Claude API error:", (e as Error).message);
-    // Fall back to score-based ordering with no classification
     return buildFallback(scoredPalette, discoveredFonts);
   }
 
@@ -175,7 +235,7 @@ Respond with ONLY valid JSON in this exact format, no explanation:
       fonts: Array<{ family: string; role: string }>;
     };
 
-    // Merge Claude's classifications back into the scored palette
+    // Merge Claude's color classifications back into the scored palette
     const classifiedColors: ClassifiedColor[] = scoredPalette.map((c) => {
       const classification = parsed.colors.find(
         (pc) => pc.hex.toLowerCase() === c.hex.toLowerCase()
@@ -186,6 +246,7 @@ Respond with ONLY valid JSON in this exact format, no explanation:
       };
     });
 
+    // Merge Claude's font classifications back into the discovered fonts list
     const classifiedFonts: ClassifiedFont[] = discoveredFonts.map((f) => {
       const classification = parsed.fonts.find(
         (pf) => pf.family.toLowerCase() === f.family.toLowerCase()
@@ -196,12 +257,13 @@ Respond with ONLY valid JSON in this exact format, no explanation:
       };
     });
 
-    // Pick winners per role (highest score wins within each role)
+    // Pick winners per role (highest score wins within each role for colors)
     const topByRole = (role: ClassifiedColor["role"]) =>
       classifiedColors
         .filter((c) => c.role === role)
         .sort((a, b) => b.score - a.score)[0]?.hex ?? null;
 
+    // For fonts: first match in the ranked list (already sorted by content-element frequency)
     const topFontByRole = (role: ClassifiedFont["role"]) =>
       classifiedFonts.find((f) => f.role === role)?.family ?? null;
 
@@ -222,7 +284,7 @@ Respond with ONLY valid JSON in this exact format, no explanation:
   }
 }
 
-// Fallback: no Claude classification — use score order, skip obvious white/black
+// Fallback: no Claude classification — use score order
 function buildFallback(
   scoredPalette: ScoredColor[],
   discoveredFonts: DiscoveredFont[]
