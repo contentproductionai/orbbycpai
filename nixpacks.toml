@@ -3,7 +3,7 @@ nixPkgs = ["chromium", "nodejs_22"]
 aptPkgs = ["libnss3", "libatk1.0-0", "libatk-bridge2.0-0", "libcups2", "libgbm1", "libasound2t64", "libpangocairo-1.0-0", "libxss1", "libgtk-3-0", "libxshmfence1", "libglu1-mesa"]
 
 [phases.install]
-cmds = ["npm install -g pnpm@10.32.1 && pnpm install --frozen-lockfile"]
+cmds = ["corepack enable pnpm && corepack prepare pnpm@10.32.1 --activate && pnpm install --frozen-lockfile"]
 
 [phases.build]
 cmds = ["pnpm build"]
