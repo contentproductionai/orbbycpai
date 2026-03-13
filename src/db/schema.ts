@@ -8,6 +8,8 @@ import {
   primaryKey,
   index,
   json,
+  jsonb,
+  unique,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -96,8 +98,27 @@ export const subscriptions = pgTable(
   })
 );
 
-// ─── Generations ─────────────────────────────────────────────────────────────
+/// ─── Brands ─────────────────────────────────────────────────────────────────
+// Global brand profile cache — shared across all users, keyed by domain.
+// Any profile older than 30 days is treated as stale and re-scraped automatically.
+export const brands = pgTable(
+  "brands",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    domain: text("domain").notNull().unique(),
+    brandUrl: text("brand_url").notNull(),
+    brandProfile: jsonb("brand_profile").notNull(),
+    scrapedAt: timestamp("scraped_at", { mode: "date" }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    domainIdx: index("brands_domain_idx").on(table.domain),
+    scrapedAtIdx: index("brands_scraped_at_idx").on(table.scrapedAt),
+  })
+);
 
+// ─── Generations ─────────────────────────────────────────────────────────────
 export const generations = pgTable(
   "generations",
   {
@@ -105,6 +126,7 @@ export const generations = pgTable(
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     brandUrl: text("brand_url").notNull(),
     instagramUrl: text("instagram_url"),
+    brandId: uuid("brand_id").references(() => brands.id, { onDelete: "set null" }),
     brandProfile: json("brand_profile"),
     status: text("status").notNull().default("pending"),
     errorMessage: text("error_message"),
@@ -141,10 +163,18 @@ export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   }),
 }));
 
+export const brandsRelations = relations(brands, ({ many }) => ({
+  generations: many(generations),
+}));
+
 export const generationsRelations = relations(generations, ({ one }) => ({
   user: one(users, {
     fields: [generations.userId],
     references: [users.id],
+  }),
+  brand: one(brands, {
+    fields: [generations.brandId],
+    references: [brands.id],
   }),
 }));
 
@@ -167,3 +197,5 @@ export type NewUser = typeof users.$inferInsert;
 export type Generation = typeof generations.$inferSelect;
 export type NewGeneration = typeof generations.$inferInsert;
 export type Subscription = typeof subscriptions.$inferSelect;
+export type Brand = typeof brands.$inferSelect;
+export type NewBrand = typeof brands.$inferInsert;

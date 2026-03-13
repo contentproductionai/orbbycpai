@@ -755,3 +755,122 @@ export async function runFullPipeline(
 
   return { brandProfile, images };
 }
+
+/**
+ * Render-only pipeline — skips DOM extraction and brand classification.
+ * Used when a fresh brand profile already exists in the brands cache.
+ */
+export async function runRenderOnly(
+  brandProfile: BrandProfile,
+  workDir: string,
+  emit: EmitFn
+): Promise<{ images: ImageResult[] }> {
+  fs.mkdirSync(workDir, { recursive: true });
+
+  emit({ type: "status", step: 1, total: 3, message: "Using cached brand profile..." });
+
+  // Step 1: Fetch Pexels photo
+  console.log("[pipeline:render-only] Starting fetchPexelsPhoto...");
+  let photoPath: string | null = null;
+  try {
+    photoPath = await fetchPexelsPhoto(brandProfile, workDir, emit);
+    console.log("[pipeline:render-only] fetchPexelsPhoto complete:", photoPath);
+  } catch (e) {
+    console.warn("[pipeline:render-only] Pexels fetch failed:", (e as Error).message);
+  }
+
+  // Step 2: Resolve logo
+  console.log("[pipeline:render-only] Starting resolveLogo...");
+  const logoDataUri = await resolveLogo(brandProfile);
+  console.log("[pipeline:render-only] resolveLogo complete");
+
+  // Step 3: Generate HTML + render for each schema
+  emit({ type: "status", step: 2, total: 3, message: "Generating posts with Claude..." });
+  const schemaIds = selectSchemas(brandProfile as unknown as Record<string, unknown>);
+  const images: ImageResult[] = [];
+
+  console.log("[pipeline:render-only] Launching shared rendering browser...");
+  const sharedBrowser: Browser = await puppeteer.launch({
+    headless: true,
+    executablePath: getChromiumPath(),
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--font-render-hinting=none",
+      "--disable-web-security",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
+  });
+
+  try {
+    for (const schemaId of schemaIds) {
+      const schema: Schema = SCHEMA_BY_ID[schemaId];
+      if (!schema) continue;
+
+      emit({ type: "schema", schemaId, schemaName: schema.name });
+      console.log(`\n  Schema: ${schema.name}`);
+
+      const primarySize = schema.sizes[0];
+      const dims = SIZE_DIMENSIONS[primarySize];
+
+      let html: string | null = null;
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (attempts < maxAttempts) {
+        attempts++;
+        try {
+          html = await generateHtml(
+            brandProfile,
+            schema.requiresPhoto ? photoPath : null,
+            logoDataUri,
+            dims.width,
+            dims.height,
+            schema.definition
+          );
+
+          const validation = validateHtml(html, dims.width, dims.height);
+          if (validation.passed) {
+            console.log(`  Guardrails passed (attempt ${attempts})`);
+            break;
+          } else {
+            console.warn(`  Guardrails failed (attempt ${attempts}):`, validation.failures);
+            if (attempts === maxAttempts) {
+              console.warn(`  Using last attempt despite failures`);
+            } else {
+              html = null;
+            }
+          }
+        } catch (e) {
+          console.error(`  Generation error (attempt ${attempts}):`, (e as Error).message);
+          if (attempts === maxAttempts) throw e;
+        }
+      }
+
+      if (!html) continue;
+
+      const htmlPath = path.join(workDir, `${schemaId}.html`);
+      fs.writeFileSync(htmlPath, html);
+
+      const renderResults = await renderSizes(html, workDir, schemaId, schema.sizes, sharedBrowser);
+
+      for (const [size, filePath] of Object.entries(renderResults)) {
+        images.push({
+          schemaId,
+          schemaName: schema.name,
+          size,
+          filePath,
+          url: "",
+        });
+        emit({ type: "image", schemaId, size, filePath });
+      }
+    }
+  } finally {
+    await sharedBrowser.close();
+  }
+
+  emit({ type: "status", step: 3, total: 3, message: "Finalizing..." });
+
+  return { images };
+}
