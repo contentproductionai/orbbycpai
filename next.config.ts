@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverComponentsExternalPackages: ["child_process", "fs", "path", "os", "crypto"],
+  },
 };
 
 export default nextConfig;
