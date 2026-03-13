@@ -160,6 +160,14 @@ Your task:
 4. If the screenshot confirms a HIGH-SIGNAL DOM entry, use that.
 5. Assign each font in rankedFonts exactly one role: "heading" | "body" | "ui" | "unknown".
 
+CRITICAL RULES — null is never acceptable for headingFont or bodyFont:
+- heading and body are ALWAYS distinct roles, even if the same font family appears on both elements.
+- If the same font is used for both headings and body text (e.g. Poppins on h1, h2, h3, AND p), include it TWICE in the fonts array — once with role "heading" and once with role "body".
+- If only one font exists on the entire site, still include it twice with both roles.
+- If no heading font can be identified, use "Arial" as the heading font.
+- If no body font can be identified, use "Arial" as the body font.
+- The downstream template renderer will crash if either is null. Your response MUST always include at least one entry with role "heading" and one with role "body".
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 INPUT DATA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -246,16 +254,33 @@ Respond with ONLY valid JSON, no explanation:
       };
     });
 
-    // Merge Claude's font classifications back into the discovered fonts list
-    const classifiedFonts: ClassifiedFont[] = discoveredFonts.map((f) => {
-      const classification = parsed.fonts.find(
+    // Merge Claude's font classifications back into the discovered fonts list.
+    // Claude may return the same font twice with different roles (e.g. Poppins as both
+    // heading and body). We expand those into separate entries so topFontByRole works.
+    const classifiedFonts: ClassifiedFont[] = [];
+    for (const f of discoveredFonts) {
+      const matches = parsed.fonts.filter(
         (pf) => pf.family.toLowerCase() === f.family.toLowerCase()
       );
-      return {
-        ...f,
-        role: (classification?.role ?? "unknown") as ClassifiedFont["role"],
-      };
-    });
+      if (matches.length === 0) {
+        classifiedFonts.push({ ...f, role: "unknown" });
+      } else {
+        for (const m of matches) {
+          classifiedFonts.push({ ...f, role: m.role as ClassifiedFont["role"] });
+        }
+      }
+    }
+
+    // Hard guarantees: headingFont and bodyFont are never null.
+    // These are always distinct roles. If Claude missed either, default to Arial.
+    const hasHeadingFont = classifiedFonts.some((f) => f.role === "heading");
+    if (!hasHeadingFont) {
+      classifiedFonts.push({ family: "Arial", seenOn: [], score: 0, role: "heading" });
+    }
+    const hasBodyFont = classifiedFonts.some((f) => f.role === "body");
+    if (!hasBodyFont) {
+      classifiedFonts.push({ family: "Arial", seenOn: [], score: 0, role: "body" });
+    }
 
     // Pick winners per role (highest score wins within each role for colors)
     const topByRole = (role: ClassifiedColor["role"]) =>
