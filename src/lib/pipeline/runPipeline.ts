@@ -128,9 +128,9 @@ export async function extractDom(
     );
 
     try {
-      await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-    } catch {
-      // If networkidle2 times out, continue with what loaded
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    } catch (e) {
+      console.warn("[extractDom] page.goto error (continuing):", (e as Error).message);
     }
 
     await new Promise((r) => setTimeout(r, 2000));
@@ -159,6 +159,7 @@ export async function extractDom(
     await page.screenshot({ path: screenshotPath, fullPage: false }).catch(() => {});
 
     // Extract all brand signals
+    console.log("[extractDom] Starting page.evaluate...");
     const raw = await page.evaluate(() => {
       // ─── Helpers ───────────────────────────────────────────────────────────
       function toHex(color: string): string | null {
@@ -371,13 +372,16 @@ export async function extractDom(
       };
     });
 
+    console.log("[extractDom] page.evaluate complete");
     // Save raw DOM data
     const rawPath = path.join(workDir, "raw_dom_data.json");
     fs.writeFileSync(rawPath, JSON.stringify(raw, null, 2));
 
     return raw as Record<string, unknown>;
   } finally {
+    console.log("[extractDom] Closing browser...");
     await browser.close();
+    console.log("[extractDom] Browser closed");
   }
 }
 
@@ -657,6 +661,7 @@ export async function runFullPipeline(
   const images: ImageResult[] = [];
 
   // Launch a single shared Puppeteer browser for all schemas to save memory and startup time
+  console.log("[pipeline] Launching shared rendering browser...");
   const sharedBrowser: Browser = await puppeteer.launch({
     headless: true,
     executablePath: getChromiumPath(),
