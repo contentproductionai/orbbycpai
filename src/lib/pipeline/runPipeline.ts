@@ -638,22 +638,28 @@ export async function runFullPipeline(
 
   // Step 2: Brand classification
   emit({ type: "status", step: 2, total: 5, message: "Classifying brand identity..." });
+  console.log("[pipeline] Starting classifyBrand...");
   const brandProfile = await classifyBrand(raw);
+  console.log("[pipeline] classifyBrand complete");
   fs.writeFileSync(
     path.join(workDir, "brand_profile.json"),
     JSON.stringify(brandProfile, null, 2)
   );
 
   // Step 3: Fetch Pexels photo
+  console.log("[pipeline] Starting fetchPexelsPhoto...");
   let photoPath: string | null = null;
   try {
     photoPath = await fetchPexelsPhoto(brandProfile, workDir, emit);
+    console.log("[pipeline] fetchPexelsPhoto complete:", photoPath);
   } catch (e) {
-    console.warn("Pexels fetch failed:", (e as Error).message);
+    console.warn("[pipeline] Pexels fetch failed:", (e as Error).message);
   }
 
   // Step 4: Resolve logo
+  console.log("[pipeline] Starting resolveLogo...");
   const logoDataUri = await resolveLogo(brandProfile);
+  console.log("[pipeline] resolveLogo complete");
 
   // Step 5: Generate HTML + render for each schema
   emit({ type: "status", step: 4, total: 5, message: "Generating posts with Claude..." });

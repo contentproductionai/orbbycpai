@@ -284,7 +284,12 @@ Return ONLY the JSON object, no other text.`;
   // Extract JSON if wrapped in markdown
   const match = text.match(/\{[\s\S]*\}/);
   const jsonStr = match ? match[0] : text;
-  return JSON.parse(jsonStr) as LlmClassification;
+  try {
+    return JSON.parse(jsonStr) as LlmClassification;
+  } catch (e) {
+    console.error("[classifyBrand] JSON.parse failed. Raw response:", text.slice(0, 500));
+    throw new Error(`Brand classification failed: LLM returned invalid JSON. ${(e as Error).message}`);
+  }
 }
 
 // ─── Main classifier ──────────────────────────────────────────────────────────
