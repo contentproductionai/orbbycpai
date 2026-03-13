@@ -3,7 +3,7 @@
  *
  * Accepts { generationId: string } in the request body.
  * Runs the full generation pipeline (TypeScript-native, no Python subprocesses).
- * Stores images on the Railway server filesystem under /public/generated/.
+ * Uploads rendered images to Cloudflare R2 and stores public URLs in the database.
  *
  * Event types (SSE):
  *   { type: "status",   step: number, total: number, message: string }
@@ -22,25 +22,13 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { runFullPipeline, type ImageResult } from "@/lib/pipeline/runPipeline";
+import { uploadToR2 } from "@/lib/storage/r2";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
-}
-
-function storeImage(
-  filePath: string,
-  generationId: string,
-  schemaId: string,
-  size: string
-): string {
-  const publicDir = path.join(process.cwd(), "public", "generated", generationId);
-  fs.mkdirSync(publicDir, { recursive: true });
-  const filename = `${schemaId}_${size}.png`;
-  fs.copyFileSync(filePath, path.join(publicDir, filename));
-  return `/generated/${generationId}/${filename}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -133,10 +121,11 @@ export async function POST(req: NextRequest) {
           emit
         );
 
-        // Copy images to public dir and build final results
+        // Upload images to R2 and build final results
         const finalImages: ImageResult[] = [];
         for (const img of rawImages) {
-          const publicUrl = storeImage(img.filePath, generationId, img.schemaId, img.size);
+          const key = `generated/${generationId}/${img.schemaId}_${img.size}.png`;
+          const publicUrl = await uploadToR2(img.filePath, key);
           const finalImg: ImageResult = { ...img, url: publicUrl };
           finalImages.push(finalImg);
           emit({ type: "image", schemaId: img.schemaId, size: img.size, url: publicUrl });
