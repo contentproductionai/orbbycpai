@@ -317,57 +317,81 @@ export async function extractDom(
 
       // ═══════════════════════════════════════════════════════════════════════
       // FONT DISCOVERY
+      // Weight by element importance: content elements (h1-h4, p, li) carry
+      // more signal than structural elements (body, footer) which are often
+      // set to a theme fallback that gets overridden everywhere visible.
       // ═══════════════════════════════════════════════════════════════════════
 
-      const fontMap = new Map<string, string[]>(); // family → elements seen on
+      const fontScoreMap = new Map<string, { score: number; seenOn: string[] }>();
 
-      function recordFont(family: string, elementLabel: string) {
+      function recordFont(family: string, elementLabel: string, weight: number) {
         const clean = family.split(",")[0].trim().replace(/['"]/g, "");
-        // Skip system/generic fallbacks
-        if (!clean || /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|BlinkMacSystemFont|Segoe UI|Arial|Helvetica|Times|Georgia|Courier)$/i.test(clean)) return;
-        const existing = fontMap.get(clean);
+        // Skip system/generic fallbacks that are never intentional brand choices
+        if (!clean || /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|BlinkMacSystemFont|Segoe\s*UI|Arial|Helvetica|Times\s*New\s*Roman|Times|Georgia|Courier\s*New|Courier|Verdana|Tahoma|Trebuchet)$/i.test(clean)) return;
+        const existing = fontScoreMap.get(clean);
         if (existing) {
-          if (!existing.includes(elementLabel)) existing.push(elementLabel);
+          existing.score += weight;
+          if (!existing.seenOn.includes(elementLabel)) existing.seenOn.push(elementLabel);
         } else {
-          fontMap.set(clean, [elementLabel]);
+          fontScoreMap.set(clean, { score: weight, seenOn: [elementLabel] });
         }
       }
 
-      // Read font from each key element type
-      const fontTargets: Array<{ sel: string; label: string }> = [
+      // High-weight: content elements — these are what a user actually reads
+      const highWeightTargets: Array<{ sel: string; label: string }> = [
         { sel: "h1", label: "h1" },
         { sel: "h2", label: "h2" },
         { sel: "h3", label: "h3" },
+        { sel: "h4", label: "h4" },
         { sel: "p", label: "body-p" },
-        { sel: "body", label: "body" },
-        { sel: "nav a, header a", label: "nav-link" },
-        { sel: "button, a[class*='btn'], input[type='submit']", label: "button" },
-        { sel: "footer", label: "footer" },
         { sel: "li", label: "list-item" },
-        { sel: "label, input, select", label: "form" },
         { sel: "blockquote", label: "blockquote" },
         { sel: "[class*='hero'] p, [class*='hero'] h1", label: "hero-text" },
       ];
-
-      for (const { sel, label } of fontTargets) {
+      for (const { sel, label } of highWeightTargets) {
         try {
           const el = document.querySelector(sel);
           if (!el) continue;
-          const cs = window.getComputedStyle(el);
-          recordFont(cs.fontFamily, label);
+          recordFont(window.getComputedStyle(el).fontFamily, label, 3);
         } catch {}
       }
 
-      // Also scan all headings to catch font variations
+      // Scan multiple headings (up to 10) to catch any font variation
       for (const el of Array.from(document.querySelectorAll("h1, h2, h3, h4")).slice(0, 10)) {
-        const cs = window.getComputedStyle(el);
-        recordFont(cs.fontFamily, el.tagName.toLowerCase());
+        recordFont(window.getComputedStyle(el).fontFamily, el.tagName.toLowerCase(), 2);
       }
 
-      const discoveredFonts = Array.from(fontMap.entries()).map(([family, seenOn]) => ({
-        family,
-        seenOn,
-      }));
+      // Medium-weight: interactive/nav elements
+      const medWeightTargets: Array<{ sel: string; label: string }> = [
+        { sel: "nav a, header a", label: "nav-link" },
+        { sel: "button, a[class*='btn'], input[type='submit']", label: "button" },
+        { sel: "label, input, select", label: "form" },
+      ];
+      for (const { sel, label } of medWeightTargets) {
+        try {
+          const el = document.querySelector(sel);
+          if (!el) continue;
+          recordFont(window.getComputedStyle(el).fontFamily, label, 2);
+        } catch {}
+      }
+
+      // Low-weight: structural elements — theme defaults, often overridden
+      const lowWeightTargets: Array<{ sel: string; label: string }> = [
+        { sel: "body", label: "body" },
+        { sel: "footer", label: "footer" },
+      ];
+      for (const { sel, label } of lowWeightTargets) {
+        try {
+          const el = document.querySelector(sel);
+          if (!el) continue;
+          recordFont(window.getComputedStyle(el).fontFamily, label, 1);
+        } catch {}
+      }
+
+      // Sort by score descending — highest-scoring font is the dominant brand font
+      const discoveredFonts = Array.from(fontScoreMap.entries())
+        .sort((a, b) => b[1].score - a[1].score)
+        .map(([family, { score, seenOn }]) => ({ family, seenOn, score }));
 
       // ═══════════════════════════════════════════════════════════════════════
       // LOGO DISCOVERY (AND-validated)
