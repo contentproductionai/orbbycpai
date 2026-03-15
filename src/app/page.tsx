@@ -31,7 +31,7 @@ export default function HomePage() {
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        padding: "80px 24px 64px",
+        padding: "40px 24px 64px",
         textAlign: "center",
         overflow: "hidden",
       }}>
