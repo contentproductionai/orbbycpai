@@ -31,7 +31,7 @@ export default function HomePage() {
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        padding: "0 24px 64px",
+        padding: "80px 24px 64px",
         textAlign: "center",
         overflow: "hidden",
       }}>
@@ -44,7 +44,7 @@ export default function HomePage() {
           {/* Badge */}
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 28 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)" }} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-native content production</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-Native Content Production</span>
           </div>
 
           {/* H1 – original clamp size restored */}
@@ -62,7 +62,7 @@ export default function HomePage() {
 
           {/* Subheadline */}
           <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 36 }}>
-            Drop your URL. Orb reads your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
+            Drop your URL. Orb extracts your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
           </p>
 
           {/* Brand extraction panel */}
@@ -205,7 +205,7 @@ export default function HomePage() {
         <p style={{ fontSize: 15, color: "var(--text-secondary)", textAlign: "center", marginBottom: 48 }}>Three steps. Sixty seconds.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, maxWidth: 900, margin: "0 auto" }}>
           {[
-            { step: "01", icon: "⬡", title: "Signal", body: "Drop your URL. Orb reads your brand DNA – colors, type, tone, and shape language – in seconds." },
+            { step: "01", icon: "⬡", title: "Signal", body: "Drop your URL. Orb extracts your brand DNA – colors, type, tone, and shape language – in seconds." },
             { step: "02", icon: "◎", title: "Generate", body: "10 designs × 4 platforms = 40 images in 60 seconds. Every format, every size, every time." },
             { step: "03", icon: "◈", title: "Refine & Download", body: "Chat to adjust anything. Make the background darker. Swap the photo. Download instantly – no ZIP files." },
           ].map((s) => (

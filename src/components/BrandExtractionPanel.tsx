@@ -82,7 +82,7 @@ export default function BrandExtractionPanel() {
           letterSpacing: "0.12em",
           marginLeft: 8,
           fontFamily: "monospace",
-        }}>BRAND.EXTRACTION</span>
+        }}>BRAND.ABDUCTION</span>
       </div>
 
       {/* Fields */}
