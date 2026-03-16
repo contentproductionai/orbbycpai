@@ -13,7 +13,7 @@ export default function HomePage() {
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center" }}>
             <div style={{ animation: "logo-float 3s ease-in-out infinite", display: "inline-flex" }}>
-              <Image src="/orb-logo.png" alt="Orb" width={81} height={81} style={{ borderRadius: "50%" }} />
+              <Image src="/orb-logo.png" alt="Orb" width={110} height={50} style={{ display: "block" }} />
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
