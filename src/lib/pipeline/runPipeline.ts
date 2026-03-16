@@ -260,7 +260,13 @@ export async function resolveLogo(brandProfile: BrandProfile): Promise<string | 
   // 1. Try logoImgs
   for (const logo of assets.logoImgs) {
     const src = typeof logo === "object" ? (logo as { src: string }).src : String(logo);
-    if (src && src.startsWith("http")) {
+    if (!src) continue;
+    // Already a data URI — use directly
+    if (src.startsWith("data:")) {
+      return src;
+    }
+    // HTTP/HTTPS URL — fetch and convert
+    if (src.startsWith("http")) {
       try {
         const buf = await fetchBuffer(src);
         if (buf.length > 500) {

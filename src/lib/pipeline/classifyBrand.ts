@@ -373,12 +373,27 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
   const llmData = await llmClassify(raw);
 
   // Background luminance + logo rendering
+  // Use raw.backgroundColor (body background) directly — it may be white/black which gets
+  // filtered out of the deduped palette. This gives the most accurate luminance reading.
   let bgColor: string | null = null;
-  for (const c of colors) {
-    const ctx = c.contexts.join(" ").toLowerCase();
-    if (/background|page/.test(ctx)) {
-      bgColor = c.hex;
-      break;
+  const rawBgColor = raw.backgroundColor as string | undefined;
+  if (rawBgColor) {
+    // Convert rgb(...) to hex if needed
+    if (rawBgColor.startsWith("rgb")) {
+      const rgb = parseRgb(rawBgColor);
+      if (rgb) bgColor = rgbToHex(...rgb);
+    } else if (rawBgColor.startsWith("#")) {
+      bgColor = rawBgColor;
+    }
+  }
+  // Fallback: look in the deduped palette
+  if (!bgColor) {
+    for (const c of colors) {
+      const ctx = c.contexts.join(" ").toLowerCase();
+      if (/background|page/.test(ctx)) {
+        bgColor = c.hex;
+        break;
+      }
     }
   }
   const bgLuminance = bgColor ? rgbToLuminance(bgColor) : 0.5;

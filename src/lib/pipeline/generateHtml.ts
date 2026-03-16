@@ -30,6 +30,7 @@ const SYSTEM_PROMPT = `You are an elite social media creative director and front
 ## Design principles
 - Typography: weights/sizes matching brand personality. All-caps headline if brand is bold/athletic. Sentence case if brand is warm/conversational.
 - Color: 60-30-10 rule. Primary color dominates. Accent color for one focal point only.
+- Background luminance: CRITICAL — if the brand's backgroundLuminance is "light", the canvas background MUST be light (white, off-white, or very light gray). If "dark", use dark. NEVER override this with your own preference. Match the brand's actual aesthetic.
 - Shape language: pill/rounded borders if brand is rounded. Zero border-radius if sharp. Never mix.
 - Space: generous padding (60px+) if spacious brand. Tighter if dense.
 - Copy: write all copy in the brand's voice. Sound like their marketing team wrote it.
@@ -63,7 +64,8 @@ function buildCompactBrandSummary(profile: BrandProfile): string {
       : "") ?? "";
   const primary = profile.primaryColor ?? "#333333";
   const accent = profile.accentColor ?? "#666666";
-  const bgLum = profile.backgroundLuminance ?? "unknown";
+  const bgLumRaw = profile.backgroundLuminance ?? 0.5;
+  const bgLum = typeof bgLumRaw === "number" ? (bgLumRaw > 0.5 ? "light" : "dark") : bgLumRaw;
   const logoRender = profile.logoRendering ?? "white";
   const hlFont =
     (profile.typography?.headline as Record<string, string | undefined>)
