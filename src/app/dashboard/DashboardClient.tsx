@@ -464,11 +464,13 @@ function RightPanel({
   onGenerate,
   isGenerating,
   generationEvents,
+  onImageClick,
 }: {
   generation: Generation | null;
   onGenerate: (generationId: string) => void;
   isGenerating: boolean;
   generationEvents: Array<{ type: string; message?: string; schemaId?: string; schemaName?: string; url?: string; size?: string }>;
+  onImageClick: (src: string) => void;
 }) {
   if (!generation) {
     return (
@@ -526,7 +528,7 @@ function RightPanel({
   // Determine which images to show in Brand Assets section
   // Prefer downloaded brand assets, fall back to ogImage
   const downloadedAssets = brandAssets?.downloadedAssets ?? [];
-  const assetImagesToShow = downloadedAssets.filter((a) => a.localUrl || a.src).slice(0, 6);
+  const assetImagesToShow = downloadedAssets.filter((a) => a.localUrl || a.src).slice(0, 12);
   const fallbackImage = brandAssets?.ogImage || "";
 
   return (
@@ -771,17 +773,23 @@ function RightPanel({
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5 }}>
               {assetImagesToShow.length > 0 ? (
                 assetImagesToShow.map((asset, i) => (
-                  <div key={i} style={{
-                    aspectRatio: "1", borderRadius: 7,
-                    background: "var(--bg-overlay)", border: "1px solid var(--border-subtle)",
-                    overflow: "hidden",
-                  }}>
+                  <div
+                    key={i}
+                    onClick={() => onImageClick(asset.localUrl || asset.src)}
+                    style={{
+                      aspectRatio: "1", borderRadius: 7,
+                      background: "var(--bg-overlay)", border: "1px solid var(--border-subtle)",
+                      overflow: "hidden", cursor: "zoom-in",
+                      transition: "border-color 0.15s, opacity 0.15s",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-default)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-subtle)"; }}
+                  >
                     <img
                       src={asset.localUrl || asset.src}
                       alt={asset.alt || `Brand asset ${i + 1}`}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       onError={(e) => {
-                        // Fall back to original src if localUrl fails
                         const img = e.currentTarget;
                         if (img.src !== asset.src) img.src = asset.src;
                       }}
@@ -928,6 +936,7 @@ export default function DashboardClient({ user, generations: initialGenerations,
   );
   const [showNewModal, setShowNewModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [generationEvents, setGenerationEvents] = useState<Array<{
     type: string; message?: string; schemaId?: string; schemaName?: string; url?: string; size?: string;
@@ -1038,12 +1047,22 @@ export default function DashboardClient({ user, generations: initialGenerations,
 
   function handleExtractionComplete(generationId: string) {
     setShowNewModal(false);
-    // Refresh to get the new generation row
+    // Optimistically add a placeholder generation row so it appears immediately
+    const placeholder: Generation = {
+      id: generationId,
+      brandUrl: "",
+      status: "processing",
+      createdAt: new Date().toISOString(),
+      images: [],
+      brandProfile: {},
+      errorMessage: null,
+    };
+    setGenerations((prev) => [placeholder, ...prev]);
+    setSelectedGen(placeholder);
+    // Start generation immediately — no need to wait for router.refresh()
+    handleGenerate(generationId);
+    // Refresh in background to get real data (brand profile, URL, etc.)
     router.refresh();
-    // Start generation immediately
-    setTimeout(() => {
-      handleGenerate(generationId);
-    }, 500);
   }
 
   const usagePercent = Math.min(100, (stats.generationsUsed / stats.generationsLimit) * 100);
@@ -1317,6 +1336,7 @@ export default function DashboardClient({ user, generations: initialGenerations,
           onGenerate={handleGenerate}
           isGenerating={isGenerating}
           generationEvents={generationEvents}
+          onImageClick={(src) => setLightboxSrc(src)}
         />
       </aside>
 
@@ -1326,6 +1346,42 @@ export default function DashboardClient({ user, generations: initialGenerations,
           onClose={() => setShowNewModal(false)}
           onComplete={handleExtractionComplete}
         />
+      )}
+
+      {/* ── Lightbox ──────────────────────────────────────────────────── */}
+      {lightboxSrc && (
+        <div
+          onClick={() => setLightboxSrc(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 200,
+            background: "rgba(0,0,0,0.92)", backdropFilter: "blur(12px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 24, cursor: "zoom-out",
+          }}
+        >
+          <button
+            onClick={() => setLightboxSrc(null)}
+            style={{
+              position: "absolute", top: 20, right: 20,
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 8, color: "rgba(255,255,255,0.7)", fontSize: 18,
+              width: 36, height: 36, cursor: "pointer", display: "flex",
+              alignItems: "center", justifyContent: "center", lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+          <img
+            src={lightboxSrc}
+            alt="Brand asset"
+            style={{
+              maxWidth: "90vw", maxHeight: "85vh",
+              borderRadius: 10, objectFit: "contain",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );
