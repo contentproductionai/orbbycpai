@@ -1,7 +1,7 @@
 /**
  * Orb Brand Classifier
  * Classifies raw DOM data into a structured BrandProfile using Claude Haiku.
- * Ported from classify_brand.py
+ * Produces both visual brand tokens AND product intelligence (Okara-style).
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -16,12 +16,27 @@ export interface ColorSample {
   count: number;
 }
 
+export interface ProductIntelligence {
+  productName: string;
+  oneLiner: string;
+  whatItDoes: string;
+  productCategory: string[];
+  productType: string;
+  targetCustomers: string;
+  businessModel: string[];
+  pricing: string;
+  keyFeatures: string[];
+  primaryCTA: string;
+  techSignals: string[];
+}
+
 export interface BrandProfile {
   meta: {
     url: string;
     brandName: string;
     extractedAt: string;
   };
+  productIntelligence: ProductIntelligence;
   tone: {
     directness: string;
     formality: string;
@@ -55,6 +70,17 @@ export interface BrandProfile {
     logoSvgs: string[];
     favicon: string;
     ogImage: string;
+    downloadedAssets: Array<{
+      src: string;
+      localPath: string;
+      localUrl: string;
+      alt: string;
+      width: number;
+      height: number;
+      ext: string;
+      isGif: boolean;
+      inHero: boolean;
+    }>;
   };
   photography: {
     style: string;
@@ -218,6 +244,7 @@ function dedupeColors(
 // ─── LLM Classification ───────────────────────────────────────────────────────
 
 interface LlmClassification {
+  // Visual / tone
   tone: {
     directness: string;
     formality: string;
@@ -230,25 +257,51 @@ interface LlmClassification {
   photographySubject: string;
   statistics: Array<{ value: string; label: string }>;
   testimonials: Array<{ quote: string; author: string }>;
+  // Product intelligence
+  productName: string;
+  oneLiner: string;
+  whatItDoes: string;
+  productCategory: string[];
+  productType: string;
+  targetCustomers: string;
+  businessModel: string[];
+  pricing: string;
+  keyFeatures: string[];
+  primaryCTA: string;
 }
 
 async function llmClassify(raw: Record<string, unknown>): Promise<LlmClassification> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const bodySnippet = (raw.bodySnippet as string) ?? (raw.copyText as string) ?? "";
+  const bodySnippet = (raw.bodySnippet as string) ?? "";
   const title = (raw.title as string) ?? "";
   const ogTitle = (raw.ogTitle as string) ?? "";
   const ogDesc = (raw.ogDescription as string) ?? "";
-  const h1s = ((raw.copyText as Record<string, string[]>)?.h1 ?? []).slice(0, 3).join(" | ");
+  const metaDesc = (raw.metaDescription as string) ?? "";
+  const copyText = (raw.copyText as Record<string, string[]>) ?? {};
+  const h1s = (copyText.h1 ?? []).slice(0, 5).join(" | ");
+  const h2s = (copyText.h2 ?? []).slice(0, 6).join(" | ");
+  const h3s = (copyText.h3 ?? []).slice(0, 6).join(" | ");
+  const ctaTexts = (copyText.cta ?? []).join(" | ");
+  const listItems = (copyText.listItems ?? []).slice(0, 8).join(" • ");
+  const bodyParas = (copyText.bodyParagraphs ?? []).slice(0, 4).join(" ");
+  const techSignals = ((raw.techSignals as string[]) ?? []).join(", ");
 
-  const prompt = `You are a brand analyst. Analyze this website data and return a JSON object.
+  const prompt = `You are a brand and product analyst. Analyze this website data and return a JSON object.
 
 Website: ${raw.url}
 Title: ${title}
 OG Title: ${ogTitle}
 OG Description: ${ogDesc}
+Meta Description: ${metaDesc}
 H1s: ${h1s}
-Body text snippet: ${bodySnippet.slice(0, 1500)}
+H2s: ${h2s}
+H3s: ${h3s}
+CTAs: ${ctaTexts}
+Feature list items: ${listItems}
+Body paragraphs: ${bodyParas}
+Tech signals detected: ${techSignals}
+Body text snippet: ${bodySnippet.slice(0, 2000)}
 
 Return ONLY this JSON object (no markdown, no explanation):
 {
@@ -267,16 +320,31 @@ Return ONLY this JSON object (no markdown, no explanation):
   ],
   "testimonials": [
     {"quote": "exact quote text", "author": "Name, Title"}
-  ]
+  ],
+  "productName": "the brand or product name",
+  "oneLiner": "one sentence describing what this product does",
+  "whatItDoes": "2-3 sentence description of the product's core function and value",
+  "productCategory": ["category 1", "category 2"],
+  "productType": "SaaS|marketplace|agency|ecommerce|media|tool|platform|service|other",
+  "targetCustomers": "who this product is built for, 1-2 sentences",
+  "businessModel": ["access-gated platform", "self-serve subscription", "contact-based sales", "freemium", "usage-based"],
+  "pricing": "pricing description or 'Pricing not publicly available'",
+  "keyFeatures": ["feature 1", "feature 2", "feature 3"],
+  "primaryCTA": "the main call-to-action button text"
 }
 
-For statistics: extract up to 3 real statistics or metrics the brand uses to prove value. If none found, return [].
-For testimonials: extract up to 3 real customer quotes from the body text. If none found, return [].
-Return ONLY the JSON object, no other text.`;
+Rules:
+- For statistics: extract up to 4 real statistics or metrics the brand uses to prove value. If none found, return [].
+- For testimonials: extract up to 3 real customer quotes from the body text. If none found, return [].
+- For keyFeatures: extract up to 6 real features from the page copy. If none found, return [].
+- For businessModel: pick all that apply from the list above.
+- For productCategory: 2-3 category tags that describe the product space.
+- All fields are required. Use empty string "" or [] for fields where data is not available.
+- Return ONLY the JSON object, no other text.`;
 
   const response = await client.messages.create({
     model: CLASSIFICATION_MODEL,
-    max_tokens: 800,
+    max_tokens: 1200,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -330,16 +398,46 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
   const bodyFont = typo.body ?? {};
 
   const brandName =
+    llmData.productName ||
     (raw.brandName as string) ||
     (raw.ogTitle as string) ||
     (raw.title as string) ||
     ((raw.copyText as Record<string, string[]>)?.h1?.[0] ?? "").split(".")[0].trim();
+
+  // Tech signals: merge browser-detected + LLM-inferred
+  const browserTechSignals = (raw.techSignals as string[]) ?? [];
+
+  // Downloaded brand assets
+  const downloadedAssets = (raw.downloadedAssets as Array<{
+    src: string;
+    localPath: string;
+    localUrl: string;
+    alt: string;
+    width: number;
+    height: number;
+    ext: string;
+    isGif: boolean;
+    inHero: boolean;
+  }>) ?? [];
 
   return {
     meta: {
       url: raw.url as string,
       brandName,
       extractedAt: new Date().toISOString(),
+    },
+    productIntelligence: {
+      productName: llmData.productName || brandName,
+      oneLiner: llmData.oneLiner || "",
+      whatItDoes: llmData.whatItDoes || "",
+      productCategory: Array.isArray(llmData.productCategory) ? llmData.productCategory : [],
+      productType: llmData.productType || "other",
+      targetCustomers: llmData.targetCustomers || "",
+      businessModel: Array.isArray(llmData.businessModel) ? llmData.businessModel : [],
+      pricing: llmData.pricing || "Pricing not publicly available",
+      keyFeatures: Array.isArray(llmData.keyFeatures) ? llmData.keyFeatures : [],
+      primaryCTA: llmData.primaryCTA || "",
+      techSignals: browserTechSignals,
     },
     tone: llmData.tone,
     brandPersonality: llmData.brandPersonality,
@@ -382,6 +480,7 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
       logoSvgs: (raw.logoSvgs as string[]) ?? [],
       favicon: (raw.favicon as string) ?? "",
       ogImage: (raw.ogImage as string) ?? "",
+      downloadedAssets,
     },
     photography: {
       style: llmData.photographyStyle,

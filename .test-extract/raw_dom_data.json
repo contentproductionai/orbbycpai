@@ -1,0 +1,457 @@
+{
+  "url": "https://selfpublishing.com/",
+  "title": "selfpublishing.com: #1 for Self-Publishing Your Book",
+  "brandName": "selfpublishing.com : The #1 Resource For Self-Publishing a Book",
+  "ogTitle": "selfpublishing.com: #1 for Self-Publishing Your Book",
+  "ogImage": "https://selfpublishing.com/wp-content/uploads/2024/07/Thumbnail2.jpg",
+  "favicon": "https://selfpublishing.com/wp-content/uploads/2024/07/selfpublishingfavicon-01-1-48x48.png",
+  "scoredPalette": [
+    {
+      "hex": "#ffffff",
+      "score": 50,
+      "sources": [
+        "area:body.home wp-singular page-template-default p",
+        "area:div.et_pb_with_border et_pb_section et_pb_se",
+        "area:div.et_pb_section et_pb_section_1 et_section",
+        "area:div.et_pb_section et_pb_section_2 et_section",
+        "area:div.et_pb_section et_pb_section_3 et_section",
+        "area:div.et_pb_section et_pb_section_4 et_section",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_section et_pb_section_6 tools-sect",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_section et_pb_section_7 et_section",
+        "area:div.et_pb_section et_pb_section_8 testimonia",
+        "area:div.et_pb_section et_pb_section_9 et_section",
+        "area:div.et_pb_section et_pb_section_10 book-type",
+        "area:div.et_pb_module et_pb_text et_pb_text_132  ",
+        "area:div.post-item",
+        "area:div.post-item",
+        "area:div.post-item",
+        "area:div.et_pb_section et_pb_section_15 et_sectio",
+        "area:div.et_pb_section et_pb_section_16 et_sectio",
+        "area:div.post-item",
+        "area:div.post-item",
+        "area:div.post-item",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "h1:color",
+        "link:color"
+      ],
+      "totalArea": 27131852.43383789
+    },
+    {
+      "hex": "#ff3e0e",
+      "score": 18,
+      "sources": [
+        "cta:background",
+        "cta:background",
+        "cta:background",
+        "cta:background",
+        "cta:background",
+        "cta:background"
+      ],
+      "totalArea": 0
+    },
+    {
+      "hex": "#003028",
+      "score": 16,
+      "sources": [
+        "area:div.et_pb_section et_pb_section_0 et_pb_with",
+        "area:div.et_pb_row et_pb_row_5 et_pb_equal_column",
+        "area:div.et_pb_section et_pb_section_5 numbers-se",
+        "area:div.et_pb_row et_pb_row_23 et_pb_equal_colum",
+        "area:div.et_pb_section et_pb_section_11 et_pb_wit",
+        "area:div.et_pb_section et_pb_section_12 plan-sect",
+        "area:div.et_pb_section et_pb_section_13 et_pb_wit",
+        "area:div.et_pb_section et_pb_section_14 et_pb_wit",
+        "area:div.et_pb_section et_pb_section_0_tb_footer "
+      ],
+      "totalArea": 6741614.25
+    },
+    {
+      "hex": "#004a3f",
+      "score": 15,
+      "sources": [
+        "area:div.et_pb_with_border et_pb_column_1_2 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_2 et_pb",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_0 e",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_2 e",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_4 e",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_6 e",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_colu",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_with",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_colu",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_with",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_colu"
+      ],
+      "totalArea": 1423243.7221679688
+    },
+    {
+      "hex": "#1b2336",
+      "score": 4,
+      "sources": [
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_1  ",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_3  ",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_5  ",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_7  "
+      ],
+      "totalArea": 196008.75
+    },
+    {
+      "hex": "#666666",
+      "score": 1,
+      "sources": [
+        "nav:text"
+      ],
+      "totalArea": 0
+    },
+    {
+      "hex": "#000000",
+      "score": 1,
+      "sources": [
+        "h2:color"
+      ],
+      "totalArea": 0
+    }
+  ],
+  "backgroundColor": "#ffffff",
+  "discoveredFonts": [
+    {
+      "family": "Poppins",
+      "seenOn": [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "p"
+      ],
+      "score": 35
+    },
+    {
+      "family": "Open Sans",
+      "seenOn": [
+        "nav",
+        "button",
+        "form",
+        "body",
+        "footer"
+      ],
+      "score": 8
+    }
+  ],
+  "fontElementMap": {
+    "h1": "Poppins",
+    "h2": "Poppins",
+    "h3": "Poppins",
+    "h4": "Poppins",
+    "p": "Poppins",
+    "nav": "Open Sans",
+    "button": "Open Sans",
+    "form": "Open Sans",
+    "body": "Open Sans",
+    "footer": "Open Sans"
+  },
+  "logo": {
+    "type": "img",
+    "src": "https://selfpublishing.com/wp-content/uploads/2025/02/horizontal-logo-300x32.png",
+    "alt": "",
+    "width": 300,
+    "height": 32,
+    "confidence": "high"
+  },
+  "borderRadii": [
+    "4px",
+    "4px"
+  ],
+  "copyText": {
+    "h1": [
+      "Become a BestsellingAuthor Today",
+      "Ready to begin your  selfpublishing.com experience?"
+    ],
+    "h2": [
+      "Harness your expertise with aprofessionally published book",
+      "Writing & publishing services",
+      "Take the next step toward your author goals",
+      "Free tools & resources",
+      "Stories that make us proud",
+      "Learn how a book can grow your business  & authority",
+      "What type of book do you want to write?",
+      "Your author success plan"
+    ],
+    "nav": [],
+    "cta": [
+      "Sign In",
+      "Schedule a Consult",
+      "Our Story",
+      "Your Coaches",
+      "The Team"
+    ]
+  },
+  "bodySnippet": "About\nPrograms\nSuccess Stories\nBlog\nFree Tools\nSign In\nSchedule a Consult\nBecome a Bestselling\nAuthor Today\n\nWe’re the #1 resource for writing, self-publishing, and marketing books online.\n\nSchedule a Consult\n\nRECOGNIZED BY LEADING PLATFORMS AND INFLUENCERS IN PUBLISHING AND BUSINESS:\n\nHarness your expertise with a\nprofessionally published book\n\nBypass traditional publishing and reap the benefits of a high-quality book done your way.\n\n1:1 book coaching\n\nTime-saving writing tips\n\nDaily group training\n\nProfessional cover & formatting\n\nPublishing & launch plan\n\nReady to begin your selfpublishing.com experience?\nI'm Ready!\nWriting & publishing services\n\nCompare our programs here.\n\nPick the genre you plan to write to see your options:\n\nNonfictionFiction\n\nBecome a Bestseller\n\nWe teach you how to write & publish a book.\n\nWhat you get:\n\n1:1 Coaching\n\nBook Cover Design\n\nFormatting\n\nAmazon/KDP Upload\nAnd More\nLearn More\n\nAuthor Advantage Accelerator\n\nWe teach you how to write, publish, & market a book—we do the publishing.\n\nWhat you get:\n\n1:1 Coaching\n\nBook Cover Design\nFormatting\nAmazon/KDP Upload\nCategories & Keywords\nA+ Content\n\nBook Promo Campaign\n\nAnd More\n\nLearn More\n\nAuthor Accelerator Elite\n\nWe teach you how to write, publish, & market a book—we do the editing, publishing, &  marketing.\n\nWhat you get:\n\nEverything in Author Advantage Accelerator plus…\n\nProfessional Manuscript Editing\n\nBookBub & Goodreads Setup\n\nNY Times Square Takeover\n\nProfessional Book Trailer\n\nFeature on selfpublishing.com\n\nAnd More\n\nLearn More\n\nProfessional Ghostwriting\n\nWe do all the writing, editing, publishing, & marketing for your book.\n\nWhat you get:\n\n1:1 Interviews\n\nBook Positioning\n\nTranscriptions\n\nGhostwritten Manuscript\n\nProfessional Editing\n\nAll Book Production\n\nPublishing Support\n\nDone-for-You Marketing\n\nAI & Non-AI Options\n\nAnd More\nLearn More\nTake the next step toward your author goals\n\nWhether you want more support as you self-publish your book or you want an\nexperienced team to do it for you, selfpublishing.com is here to help.\n\nSchedule a Consultation\n\nSELFPUBLISHING.COM BY THE NUMBERS\n\nPROVEN SUCCESS STORIES\n1000s of bestsellers\n\nOur programs have helped authors achieve bestseller status,\nwith thousands of success stories across various genres.\n\nRead success stories >\n\nTHRIVING COMMUNITY\n\n250K+\n\nJoin an active community of over 250,000 members who support and inspire each other.\n\nCOUNTRIES PUBLISHED\n\n91+\n\nReach an international audience with our proven publishing method and services.\n\nGOOGLE RATING\n\n4.9+\n\nOur courses consistently receive high ratings, with an average Google rating of 4.9.\n\nREVENUE GROWTH\n\nMillions\n\nOur authors have earned millions in royalties and turned their books into wildly profitable businesses.\n\nDONE-FOR-YOU\nPublishing services\n\nLeverage the expertise of a professional team of coaches,\nghostwriters, and editors dedicated to your success.\n\nMeet our team >\n\nFree tools & resources\nQUIZ: Which publishing company is right for you?\nUnlimited ide",
+  "stats": [],
+  "testimonials": [
+    {
+      "quote": "Blog Categories\n\t\t\t\n\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\tWriting\n\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\tPublishing\n\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\tEditing\n\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\tBook Marketing\n\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\tHelpful Reviews\n\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\t\n\t\t\t\tAll Blogs",
+      "author": "Search for:"
+    },
+    {
+      "quote": "<img style=\"margin-top:8px;\" src=\"https://self-publishingschool.com/wp-content/uploads/2025/05/Search-1.png\" data-eio=\"l\">",
+      "author": "Schedule a Consult"
+    },
+    {
+      "quote": "Book Title Generator\n      Nonfiction Book Outline\n      Free Copy of Published.\n      All Tools & Resources",
+      "author": "Free Tools"
+    },
+    {
+      "quote": "<img width=\"23\" height=\"21\" src=\"https://selfpublishing.com/wp-content/uploads/2025/07/Symbol-5.png\" alt=\"\" class=\"et-waypoint et_pb_animation_off et_pb_animation_off_tablet et_pb_animation_off_phone wp-image-36660\" />",
+      "author": "Book Marketing"
+    }
+  ],
+  "images": [
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Group-1000015032.png",
+      "alt": "Group 1000015032",
+      "width": 569,
+      "height": 638,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/lisa.png",
+      "alt": "Lisa",
+      "width": 567,
+      "height": 659,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Group-1000015160-1.png",
+      "alt": "Group 1000015160 1",
+      "width": 209,
+      "height": 209,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Group-1000015159-1.png",
+      "alt": "Group 1000015159 1",
+      "width": 208,
+      "height": 208,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Group-1000015158-1.png",
+      "alt": "Group 1000015158 1",
+      "width": 207,
+      "height": 207,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Group-1000015157-1.png",
+      "alt": "Group 1000015157 1",
+      "width": 208,
+      "height": 208,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Group-1000015155-1.png",
+      "alt": "Group 1000015155 1",
+      "width": 207,
+      "height": 217,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/rrrrrrrr-1.png",
+      "alt": "Rrrrrrrr 1",
+      "width": 750,
+      "height": 1253,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Book01.png",
+      "alt": "Book01",
+      "width": 387,
+      "height": 499,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/09/Book02.png",
+      "alt": "Book02",
+      "width": 387,
+      "height": 499,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/12/X01.png",
+      "alt": "X",
+      "width": 560,
+      "height": 560,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/12/pinterest01.png",
+      "alt": "pinterest",
+      "width": 560,
+      "height": 560,
+      "inHero": false
+    },
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2024/12/youtube01.png",
+      "alt": "youtube",
+      "width": 560,
+      "height": 561,
+      "inHero": false
+    }
+  ],
+  "bgImages": [
+    "https://selfpublishing.com/wp-content/uploads/2024/07/Vector.png",
+    "https://selfpublishing.com/wp-content/uploads/2024/07/logos-2.png",
+    "https://selfpublishing.com/wp-content/uploads/2024/09/arrow-2.png",
+    "https://selfpublishing.com/wp-content/uploads/2024/09/QUIZ-1.jpg",
+    "https://selfpublishing.com/wp-content/uploads/2024/12/TITLE-GENERATOR3.jpg"
+  ],
+  "spatial": {
+    "paddingTop": "0px",
+    "paddingBottom": "0px",
+    "paddingLeft": "0px",
+    "paddingRight": "0px",
+    "avgPadding": 0,
+    "avgMargin": 0
+  },
+  "colorSamples": [
+    {
+      "hex": "#ffffff",
+      "contexts": [
+        "area:body.home wp-singular page-template-default p",
+        "area:div.et_pb_with_border et_pb_section et_pb_se",
+        "area:div.et_pb_section et_pb_section_1 et_section",
+        "area:div.et_pb_section et_pb_section_2 et_section",
+        "area:div.et_pb_section et_pb_section_3 et_section",
+        "area:div.et_pb_section et_pb_section_4 et_section",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_section et_pb_section_6 tools-sect",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_section et_pb_section_7 et_section",
+        "area:div.et_pb_section et_pb_section_8 testimonia",
+        "area:div.et_pb_section et_pb_section_9 et_section",
+        "area:div.et_pb_section et_pb_section_10 book-type",
+        "area:div.et_pb_module et_pb_text et_pb_text_132  ",
+        "area:div.post-item",
+        "area:div.post-item",
+        "area:div.post-item",
+        "area:div.et_pb_section et_pb_section_15 et_sectio",
+        "area:div.et_pb_section et_pb_section_16 et_sectio",
+        "area:div.post-item",
+        "area:div.post-item",
+        "area:div.post-item",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "cta:text",
+        "h1:color",
+        "link:color"
+      ],
+      "count": 50
+    },
+    {
+      "hex": "#ff3e0e",
+      "contexts": [
+        "cta:background",
+        "cta:background",
+        "cta:background",
+        "cta:background",
+        "cta:background",
+        "cta:background"
+      ],
+      "count": 18
+    },
+    {
+      "hex": "#003028",
+      "contexts": [
+        "area:div.et_pb_section et_pb_section_0 et_pb_with",
+        "area:div.et_pb_row et_pb_row_5 et_pb_equal_column",
+        "area:div.et_pb_section et_pb_section_5 numbers-se",
+        "area:div.et_pb_row et_pb_row_23 et_pb_equal_colum",
+        "area:div.et_pb_section et_pb_section_11 et_pb_wit",
+        "area:div.et_pb_section et_pb_section_12 plan-sect",
+        "area:div.et_pb_section et_pb_section_13 et_pb_wit",
+        "area:div.et_pb_section et_pb_section_14 et_pb_wit",
+        "area:div.et_pb_section et_pb_section_0_tb_footer "
+      ],
+      "count": 16
+    },
+    {
+      "hex": "#004a3f",
+      "contexts": [
+        "area:div.et_pb_with_border et_pb_column_1_2 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_4 et_pb",
+        "area:div.et_pb_with_border et_pb_column_1_2 et_pb",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_0 e",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_2 e",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_4 e",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_6 e",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_colu",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_with",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_colu",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_with",
+        "area:div.et_pb_column et_pb_column_1_3 et_pb_colu"
+      ],
+      "count": 15
+    },
+    {
+      "hex": "#1b2336",
+      "contexts": [
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_1  ",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_3  ",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_5  ",
+        "area:div.et_pb_module et_pb_blurb et_pb_blurb_7  "
+      ],
+      "count": 4
+    },
+    {
+      "hex": "#666666",
+      "contexts": [
+        "nav:text"
+      ],
+      "count": 1
+    },
+    {
+      "hex": "#000000",
+      "contexts": [
+        "h2:color"
+      ],
+      "count": 1
+    }
+  ],
+  "logoImgs": [
+    {
+      "src": "https://selfpublishing.com/wp-content/uploads/2025/02/horizontal-logo-300x32.png",
+      "alt": "",
+      "width": 300,
+      "height": 32
+    }
+  ],
+  "logoSvgs": []
+}

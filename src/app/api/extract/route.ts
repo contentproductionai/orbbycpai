@@ -7,7 +7,6 @@
  *
  * Event types:
  *   { type: "status",   step: number, total: number, message: string }
- *   { type: "token",    field: string, value: string }
  *   { type: "complete", generationId: string, brandProfile: BrandProfile }
  *   { type: "error",    message: string }
  */
@@ -27,6 +26,26 @@ export const maxDuration = 120;
 
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+// Convert a local image file to a base64 data URI so it survives workDir cleanup
+function fileToDataUri(filePath: string): string | null {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const buf = fs.readFileSync(filePath);
+    if (buf.length < 1000) return null; // skip empty/corrupt files
+    const ext = path.extname(filePath).toLowerCase().replace(".", "");
+    const mimeMap: Record<string, string> = {
+      jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+      gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+    };
+    const mime = mimeMap[ext] || "image/jpeg";
+    // Cap at 500KB per image to keep the DB row manageable
+    if (buf.length > 512 * 1024) return null;
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -76,31 +95,37 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        // Step 1: DOM extraction
-        emit({ type: "status", step: 1, total: 2, message: "Extracting brand signals from website..." });
+        // DOM extraction — extractDom.ts emits its own step-numbered status events
         const raw = await extractDom(normalizedUrl, workDir, emit);
 
-        // Emit discovered tokens
+        // Resolve downloaded brand assets to base64 data URIs before workDir is deleted
         const rawTyped = raw as Record<string, unknown>;
-        if (rawTyped.brandName) emit({ type: "token", field: "brandName", value: String(rawTyped.brandName) });
-        const colors = (rawTyped.colorSamples as Array<{ hex: string }>) ?? [];
-        if (colors.length > 0) {
-          emit({ type: "token", field: "colors", value: colors.slice(0, 5).map((c) => c.hex).join(", ") });
-        }
+        const downloadedAssets = (rawTyped.downloadedAssets as Array<{
+          src: string;
+          localPath: string;
+          localUrl: string;
+          alt: string;
+          width: number;
+          height: number;
+          ext: string;
+          isGif: boolean;
+          inHero: boolean;
+        }>) ?? [];
 
-        // Step 2: Brand classification
-        emit({ type: "status", step: 2, total: 2, message: "Classifying brand identity with Claude..." });
-        const profile = await classifyBrand(raw);
+        // Convert each downloaded file to a data URI (capped at 500KB)
+        const resolvedAssets = downloadedAssets.map((asset) => {
+          const dataUri = fileToDataUri(asset.localPath);
+          return {
+            ...asset,
+            localUrl: dataUri || asset.src, // fall back to original src if too large
+          };
+        }).filter((a) => a.localUrl); // drop any that failed completely
 
-        // Emit key brand tokens
-        emit({ type: "token", field: "brandPersonality", value: profile.brandPersonality });
-        emit({ type: "token", field: "tone", value: profile.tone.summary });
-        emit({ type: "token", field: "primaryColor", value: profile.primaryColor });
-        emit({ type: "token", field: "accentColor", value: profile.accentColor });
-        const hlFont = (profile.typography?.headline as Record<string, string | undefined>)?.fontFamily;
-        if (hlFont) emit({ type: "token", field: "headlineFont", value: hlFont });
-        if (profile.statistics?.length > 0) emit({ type: "token", field: "statistics", value: `${profile.statistics.length} found` });
-        if (profile.testimonials?.length > 0) emit({ type: "token", field: "testimonials", value: `${profile.testimonials.length} found` });
+        // Inject resolved assets back into raw before classification
+        rawTyped.downloadedAssets = resolvedAssets;
+
+        // Brand classification
+        const profile = await classifyBrand(rawTyped);
 
         // Insert generation row
         const [generation] = await db

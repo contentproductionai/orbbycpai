@@ -310,6 +310,35 @@ window.__orbExtract = function () {
     .sort(function (a, b) { return b[1].score - a[1].score; })
     .map(function (entry) { return { family: entry[0], seenOn: entry[1].seenOn, score: entry[1].score }; });
 
+  // ─── Font file URLs (for brand asset collection) ──────────────────────
+  var fontFileUrls = [];
+  for (var fsi = 0; fsi < sheets.length; fsi++) {
+    try {
+      var fRules = Array.from(sheets[fsi].cssRules || []);
+      for (var fri = 0; fri < fRules.length; fri++) {
+        var fRule = fRules[fri];
+        if (fRule.constructor && fRule.constructor.name === "CSSFontFaceRule") {
+          var srcText = fRule.style && fRule.style.getPropertyValue("src");
+          if (srcText) {
+            var urlMatches = srcText.match(/url\(["']?([^"')]+\.(?:ttf|woff2?|otf))["']?\)/gi);
+            if (urlMatches) {
+              urlMatches.forEach(function (u) {
+                var m = u.match(/url\(["']?([^"')]+)["']?\)/i);
+                if (m && m[1]) {
+                  var absUrl = m[1];
+                  if (absUrl.indexOf("http") !== 0) {
+                    try { absUrl = new URL(absUrl, window.location.href).href; } catch (e) {}
+                  }
+                  if (fontFileUrls.indexOf(absUrl) === -1) fontFileUrls.push(absUrl);
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   // LOGO DISCOVERY (AND-validated)
   // ═══════════════════════════════════════════════════════════════════════
@@ -436,14 +465,25 @@ window.__orbExtract = function () {
   var copyText = {
     h1: Array.from(document.querySelectorAll("h1")).map(function (el) { return (el.textContent || "").trim(); }).filter(Boolean).slice(0, 5),
     h2: Array.from(document.querySelectorAll("h2")).map(function (el) { return (el.textContent || "").trim(); }).filter(Boolean).slice(0, 8),
+    h3: Array.from(document.querySelectorAll("h3")).map(function (el) { return (el.textContent || "").trim(); }).filter(Boolean).slice(0, 8),
     nav: Array.from(document.querySelectorAll("nav a")).map(function (el) { return (el.textContent || "").trim(); }).filter(Boolean).slice(0, 10),
     cta: allButtons.filter(function (el) {
       var t = (el.textContent || "").trim();
       return t.length > 0 && t.length <= 50;
     }).map(function (el) { return (el.textContent || "").trim(); }).filter(Boolean).slice(0, 5),
+    bodyParagraphs: Array.from(document.querySelectorAll("main p, section p, article p, [class*='hero'] p, [class*='content'] p"))
+      .filter(function (el) { return !el.closest("nav, footer"); })
+      .map(function (el) { return (el.textContent || "").trim(); })
+      .filter(function (t) { return t.length > 30 && t.length < 400; })
+      .slice(0, 8),
+    listItems: Array.from(document.querySelectorAll("main li, section li, article li"))
+      .filter(function (el) { return !el.closest("nav, footer"); })
+      .map(function (el) { return (el.textContent || "").trim(); })
+      .filter(function (t) { return t.length > 10 && t.length < 200; })
+      .slice(0, 12),
   };
 
-  var bodySnippet = document.body.innerText.slice(0, 3000);
+  var bodySnippet = document.body.innerText.slice(0, 4000);
 
   var faviconEl = document.querySelector('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]');
   var favicon = faviconEl ? faviconEl.href : "";
@@ -451,41 +491,193 @@ window.__orbExtract = function () {
   var ogImage = ogImageMeta ? (ogImageMeta.getAttribute("content") || "") : "";
   var ogTitleMeta = document.querySelector('meta[property="og:title"]');
   var ogTitle = ogTitleMeta ? (ogTitleMeta.getAttribute("content") || document.title) : document.title;
+  var ogDescMeta = document.querySelector('meta[property="og:description"]');
+  var ogDescription = ogDescMeta ? (ogDescMeta.getAttribute("content") || "") : "";
+  var metaDescMeta = document.querySelector('meta[name="description"]');
+  var metaDescription = metaDescMeta ? (metaDescMeta.getAttribute("content") || "") : "";
   var siteNameMeta = document.querySelector('meta[property="og:site_name"]');
   var rawSiteName = siteNameMeta ? (siteNameMeta.getAttribute("content") || "") : "";
   var genericNames = ["my site", "home", "website", "untitled", "wix site"];
   var brandName = genericNames.indexOf(rawSiteName.toLowerCase()) !== -1 ? "" : rawSiteName;
 
-  var images = Array.from(document.querySelectorAll("img"))
+  // ═══════════════════════════════════════════════════════════════════════
+  // BRAND ASSET IMAGES (content images, not nav/header/favicon)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Collect all meaningful images: ≥100×100px, not in nav/header, not favicon/icon/avatar/logo
+  var brandAssetImages = Array.from(document.querySelectorAll("img"))
     .filter(function (img) {
-      if (img.naturalWidth < 200 || img.naturalHeight < 200) return false;
-      if (img.closest("nav, header")) return false;
       var src = img.src || "";
-      if (src.indexOf("data:") !== -1 || src.indexOf("logo") !== -1 || src.indexOf("icon") !== -1 || src.indexOf("avatar") !== -1) return false;
+      if (!src || src.indexOf("data:") === 0) return false;
+      // Skip tiny images
+      var renderedW = img.getBoundingClientRect().width;
+      var renderedH = img.getBoundingClientRect().height;
+      var naturalW = img.naturalWidth;
+      var naturalH = img.naturalHeight;
+      var effectiveW = naturalW || renderedW;
+      var effectiveH = naturalH || renderedH;
+      if (effectiveW < 100 || effectiveH < 100) return false;
+      // Skip nav/header images (likely logos)
+      if (img.closest("nav, header")) return false;
+      // Skip favicon/icon/avatar/logo by URL pattern
+      var srcLower = src.toLowerCase();
+      if (/favicon|\.ico$|icon[\-_]|[\-_]icon|avatar|gravatar/.test(srcLower)) return false;
+      // Skip very small logos by size
+      if (effectiveW < 150 && effectiveH < 80) return false;
       return true;
     })
     .map(function (img) {
+      var rect = img.getBoundingClientRect();
+      var absTop = rect.top + window.scrollY;
+      var src = img.src;
+      // Determine file type
+      var ext = "";
+      try {
+        var urlPath = new URL(src).pathname;
+        var dotIdx = urlPath.lastIndexOf(".");
+        if (dotIdx !== -1) ext = urlPath.slice(dotIdx + 1).toLowerCase().split("?")[0];
+      } catch (e) {}
       return {
-        src: img.src,
+        src: src,
         alt: img.alt || "",
-        width: img.naturalWidth,
-        height: img.naturalHeight,
+        width: img.naturalWidth || Math.round(rect.width),
+        height: img.naturalHeight || Math.round(rect.height),
+        ext: ext,
+        isGif: ext === "gif",
         inHero: !!(img.closest('[class*="hero"], [class*="Hero"], section:first-of-type')),
+        positionY: Math.round(absTop),
       };
     })
-    .slice(0, 15);
+    // Sort: hero first, then by vertical position
+    .sort(function (a, b) {
+      if (a.inHero && !b.inHero) return -1;
+      if (!a.inHero && b.inHero) return 1;
+      return a.positionY - b.positionY;
+    })
+    .slice(0, 20);
 
+  // Also collect CSS background images from content sections
   var bgImages = Array.from(document.querySelectorAll('[class*="hero"], [class*="Hero"], section, div'))
+    .filter(function (el) { return !el.closest("nav, header, footer"); })
     .map(function (el) {
       var bg = window.getComputedStyle(el).backgroundImage;
       if (bg && bg !== "none" && bg.indexOf("url(") !== -1) {
         var match = bg.match(/url\(["']?([^"')]+)["']?\)/);
-        return match ? match[1] : null;
+        if (match && match[1]) {
+          var src = match[1];
+          if (src.indexOf("data:") === 0) return null;
+          if (/favicon|\.ico$/.test(src.toLowerCase())) return null;
+          return src;
+        }
       }
       return null;
     })
     .filter(Boolean)
     .slice(0, 5);
+
+  // Legacy images field (for backward compat with classifyBrand)
+  var images = brandAssetImages.slice(0, 15).map(function (img) {
+    return { src: img.src, alt: img.alt, width: img.width, height: img.height, inHero: img.inHero };
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // TECH SIGNALS
+  // ═══════════════════════════════════════════════════════════════════════
+
+  var techSignals = [];
+
+  // Platform detection from script sources
+  var scriptSrcs = Array.from(document.querySelectorAll("script[src]")).map(function (s) { return s.src || ""; });
+  var allScriptSrcs = scriptSrcs.join(" ").toLowerCase();
+
+  var platformChecks = [
+    { pattern: /wixstatic\.com|wix\.com/, label: "Wix" },
+    { pattern: /webflow\.com|webflow\.io/, label: "Webflow" },
+    { pattern: /squarespace\.com|sqsp\.net/, label: "Squarespace" },
+    { pattern: /shopify\.com|myshopify\.com/, label: "Shopify" },
+    { pattern: /wordpress\.com|wp-content|wp-includes/, label: "WordPress" },
+    { pattern: /hubspot\.com|hs-scripts/, label: "HubSpot" },
+    { pattern: /framer\.com|framerusercontent/, label: "Framer" },
+    { pattern: /ghost\.io|ghost\.org/, label: "Ghost" },
+    { pattern: /bubble\.io/, label: "Bubble" },
+    { pattern: /nextjs|_next\/static/, label: "Next.js" },
+    { pattern: /gatsby|gatsby-image/, label: "Gatsby" },
+    { pattern: /react-dom|reactjs/, label: "React" },
+    { pattern: /angular\.js|angular\.min/, label: "Angular" },
+    { pattern: /vue\.js|vue\.min/, label: "Vue.js" },
+  ];
+  for (var pci = 0; pci < platformChecks.length; pci++) {
+    if (platformChecks[pci].pattern.test(allScriptSrcs) || platformChecks[pci].pattern.test(window.location.href)) {
+      techSignals.push(platformChecks[pci].label + "-based website");
+    }
+  }
+
+  // Analytics & marketing tools
+  var analyticsChecks = [
+    { pattern: /google-analytics|gtag|googletagmanager/, label: "Google Analytics" },
+    { pattern: /segment\.com|segment\.io/, label: "Segment" },
+    { pattern: /mixpanel\.com/, label: "Mixpanel" },
+    { pattern: /intercom\.io|intercom\.com/, label: "Intercom" },
+    { pattern: /drift\.com/, label: "Drift" },
+    { pattern: /hotjar\.com/, label: "Hotjar" },
+    { pattern: /hubspot\.com/, label: "HubSpot CRM" },
+    { pattern: /salesforce\.com|pardot/, label: "Salesforce" },
+    { pattern: /marketo\.com/, label: "Marketo" },
+    { pattern: /linkedin\.com\/insight/, label: "LinkedIn Insight" },
+    { pattern: /facebook\.net\/en_US\/fbevents/, label: "Facebook Pixel" },
+    { pattern: /stripe\.com/, label: "Stripe payments" },
+  ];
+  for (var aci = 0; aci < analyticsChecks.length; aci++) {
+    if (analyticsChecks[aci].pattern.test(allScriptSrcs)) {
+      techSignals.push(analyticsChecks[aci].label);
+    }
+  }
+
+  // Social presence from footer links
+  var allLinks = Array.from(document.querySelectorAll("a[href]")).map(function (a) { return a.href || ""; });
+  var allLinksStr = allLinks.join(" ").toLowerCase();
+  var socialPlatforms = [];
+  if (/linkedin\.com\/company/.test(allLinksStr)) socialPlatforms.push("LinkedIn");
+  if (/twitter\.com|x\.com/.test(allLinksStr)) socialPlatforms.push("X/Twitter");
+  if (/instagram\.com/.test(allLinksStr)) socialPlatforms.push("Instagram");
+  if (/facebook\.com/.test(allLinksStr)) socialPlatforms.push("Facebook");
+  if (/youtube\.com/.test(allLinksStr)) socialPlatforms.push("YouTube");
+  if (/tiktok\.com/.test(allLinksStr)) socialPlatforms.push("TikTok");
+  if (socialPlatforms.length > 0) {
+    techSignals.push("Social presence on " + socialPlatforms.join(", "));
+  }
+
+  // App store links
+  if (/apps\.apple\.com|itunes\.apple\.com/.test(allLinksStr)) techSignals.push("iOS app available");
+  if (/play\.google\.com/.test(allLinksStr)) techSignals.push("Android app available");
+
+  // Subdomains referenced
+  var subdomainMatches = allLinks
+    .map(function (href) {
+      try {
+        var u = new URL(href);
+        var host = u.hostname;
+        var base = window.location.hostname.replace(/^www\./, "");
+        if (host !== window.location.hostname && host.endsWith("." + base)) {
+          return host;
+        }
+      } catch (e) {}
+      return null;
+    })
+    .filter(Boolean);
+  var uniqueSubdomains = subdomainMatches.filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 3);
+  uniqueSubdomains.forEach(function (sub) {
+    techSignals.push("Subdomain: " + sub);
+  });
+
+  // AI/ML signals
+  if (/openai|gpt|claude|anthropic|llm|embedding|vector|ai.companion|ai.assistant/.test(allScriptSrcs + bodySnippet.toLowerCase())) {
+    techSignals.push("AI/ML layer detected");
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // SPATIAL & SHAPE
+  // ═══════════════════════════════════════════════════════════════════════
 
   function spatialFor(selector) {
     var el = document.querySelector(selector);
@@ -519,11 +711,14 @@ window.__orbExtract = function () {
     brandName: brandName,
     ogTitle: ogTitle,
     ogImage: ogImage,
+    ogDescription: ogDescription,
+    metaDescription: metaDescription,
     favicon: favicon,
     scoredPalette: scoredPalette,
     backgroundColor: bodyBg,
     discoveredFonts: discoveredFonts,
     fontElementMap: fontElementMap,
+    fontFileUrls: fontFileUrls,
     logo: logo,
     borderRadii: borderRadii,
     copyText: copyText,
@@ -532,6 +727,8 @@ window.__orbExtract = function () {
     testimonials: testimonials,
     images: images,
     bgImages: bgImages,
+    brandAssetImages: brandAssetImages,
+    techSignals: techSignals,
     spatial: spatial,
     colorSamples: scoredPalette.map(function (c) { return { hex: c.hex, contexts: c.sources, count: c.score }; }),
     logoImgs: logo && logo.type === "img" ? [{ src: logo.src, alt: logo.alt, width: logo.width, height: logo.height }] : [],

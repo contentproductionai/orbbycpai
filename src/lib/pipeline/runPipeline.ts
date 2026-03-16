@@ -365,7 +365,8 @@ export async function runFullPipeline(
   const visualClassification = await classifyVisual(
     (raw.viewportScreenshotPath as string) ?? "",
     (raw.scoredPalette as Array<{ hex: string; score: number; sources: string[]; totalArea?: number }>) ?? [],
-    (raw.discoveredFonts as Array<{ family: string; seenOn: string[] }>) ?? []
+    (raw.discoveredFonts as Array<{ family: string; seenOn: string[]; score?: number }>) ?? [],
+    (raw.fontElementMap as Record<string, string | null>) ?? {}
   );
   console.log("[pipeline] classifyVisual complete:", {
     brandPrimary: visualClassification.brandPrimary,

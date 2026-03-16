@@ -58,7 +58,8 @@ function formatDate(iso: string): string {
 function getBrandName(gen: Generation): string {
   const profile = gen.brandProfile;
   const meta = profile?.meta as Record<string, unknown> | undefined;
-  return (meta?.brandName as string) || extractDomain(gen.brandUrl);
+  const pi = profile?.productIntelligence as Record<string, unknown> | undefined;
+  return (pi?.productName as string) || (meta?.brandName as string) || extractDomain(gen.brandUrl);
 }
 
 function extractDomain(url: string): string {
@@ -101,6 +102,17 @@ function getStatusLabel(status: string): string {
   }
 }
 
+// ─── Extraction step definitions ──────────────────────────────────────────────
+
+const EXTRACTION_STEPS = [
+  { step: 1, label: "Connecting to website..." },
+  { step: 2, label: "Scanning colors and fonts..." },
+  { step: 3, label: "Reading page copy and product signals..." },
+  { step: 4, label: "Collecting brand images..." },
+  { step: 5, label: "Identifying tech stack..." },
+  { step: 6, label: "Classifying brand with AI..." },
+];
+
 // ─── New Generation Modal ─────────────────────────────────────────────────────
 
 function NewGenerationModal({
@@ -112,20 +124,17 @@ function NewGenerationModal({
 }) {
   const [url, setUrl] = useState("");
   const [phase, setPhase] = useState<"input" | "extracting" | "done">("input");
-  const [events, setEvents] = useState<Array<{ type: string; message?: string; hex?: string; family?: string; role?: string }>>([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [error, setError] = useState("");
   const [generationId, setGenerationId] = useState("");
-  const eventsEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [events]);
 
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     if (!url.trim()) return;
     setPhase("extracting");
-    setEvents([]);
+    setCurrentStep(1);
+    setCompletedSteps([]);
     setError("");
 
     const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
@@ -168,10 +177,21 @@ function NewGenerationModal({
             }
             if (event.type === "complete") {
               setGenerationId(event.generationId);
-              setPhase("done");
+              // Mark all steps complete
+              setCompletedSteps(EXTRACTION_STEPS.map((s) => s.step));
+              setCurrentStep(0);
+              setTimeout(() => setPhase("done"), 400);
               return;
             }
-            setEvents((prev) => [...prev, event]);
+            if (event.type === "status" && typeof event.step === "number") {
+              // Mark previous step complete, advance current
+              setCompletedSteps((prev) => {
+                const prevStep = event.step - 1;
+                if (prevStep > 0 && !prev.includes(prevStep)) return [...prev, prevStep];
+                return prev;
+              });
+              setCurrentStep(event.step);
+            }
           } catch {}
         }
       }
@@ -237,11 +257,11 @@ function NewGenerationModal({
                     width: "100%", background: "var(--bg-base)",
                     border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)",
                     padding: "10px 14px", fontSize: 14, color: "var(--text-primary)",
-                    outline: "none", fontFamily: "inherit",
+                    outline: "none", fontFamily: "inherit", boxSizing: "border-box",
                   }}
                 />
                 <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 6 }}>
-                  Orb will extract colors, typography, tone, and brand identity.
+                  Orb will extract colors, typography, brand images, and product intelligence.
                 </p>
               </div>
               {error && (
@@ -271,56 +291,65 @@ function NewGenerationModal({
 
           {phase === "extracting" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Active step header */}
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{
                   width: 8, height: 8, borderRadius: "50%", background: "var(--brand-primary)",
                   boxShadow: "0 0 8px var(--brand-primary)",
-                  animation: "pulse-glow 1.5s infinite",
+                  animation: "pulse-glow 1.5s infinite", flexShrink: 0,
                 }} />
                 <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                   Extracting brand from {extractDomain(url)}...
                 </span>
               </div>
+
+              {/* Step list */}
               <div style={{
                 background: "var(--bg-base)", border: "1px solid var(--border-subtle)",
-                borderRadius: "var(--radius-md)", padding: 16, maxHeight: 200, overflowY: "auto",
-                display: "flex", flexDirection: "column", gap: 8,
+                borderRadius: "var(--radius-md)", padding: "14px 16px",
+                display: "flex", flexDirection: "column", gap: 10,
               }}>
-                {events.map((ev, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                    {ev.type === "status" && (
-                      <>
-                        <span style={{ color: "var(--brand-primary)", opacity: 0.7 }}>◎</span>
-                        <span style={{ color: "var(--text-secondary)" }}>{ev.message}</span>
-                      </>
-                    )}
-                    {ev.type === "color" && ev.hex && (
-                      <>
-                        <div style={{ width: 14, height: 14, borderRadius: 3, background: ev.hex, flexShrink: 0 }} />
-                        <span style={{ color: "var(--text-tertiary)" }}>Color extracted: {ev.hex}</span>
-                      </>
-                    )}
-                    {ev.type === "font" && (
-                      <>
-                        <span style={{ color: "var(--brand-primary)", opacity: 0.5 }}>T</span>
-                        <span style={{ color: "var(--text-tertiary)" }}>Font: {ev.family} ({ev.role})</span>
-                      </>
-                    )}
-                    {ev.type === "tone" && (
-                      <>
-                        <span style={{ color: "var(--brand-primary)", opacity: 0.5 }}>~</span>
-                        <span style={{ color: "var(--text-tertiary)" }}>Tone: {(ev as { summary?: string }).summary}</span>
-                      </>
-                    )}
-                    {ev.type === "photo" && (
-                      <>
-                        <span style={{ color: "var(--brand-primary)", opacity: 0.5 }}>⬡</span>
-                        <span style={{ color: "var(--text-tertiary)" }}>Photography: {(ev as { style?: string }).style}</span>
-                      </>
-                    )}
-                  </div>
-                ))}
-                <div ref={eventsEndRef} />
+                {EXTRACTION_STEPS.map((s) => {
+                  const isDone = completedSteps.includes(s.step);
+                  const isActive = currentStep === s.step;
+                  const isPending = !isDone && !isActive;
+                  return (
+                    <div key={s.step} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+                      {/* Status indicator */}
+                      <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {isDone ? (
+                          <div style={{
+                            width: 14, height: 14, borderRadius: "50%",
+                            background: "var(--brand-primary)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                            <span style={{ fontSize: 8, color: "#000", fontWeight: 700 }}>✓</span>
+                          </div>
+                        ) : isActive ? (
+                          <div style={{
+                            width: 8, height: 8, borderRadius: "50%",
+                            background: "var(--brand-primary)",
+                            boxShadow: "0 0 6px var(--brand-primary)",
+                            animation: "pulse-glow 1.5s infinite",
+                          }} />
+                        ) : (
+                          <div style={{
+                            width: 8, height: 8, borderRadius: "50%",
+                            border: "1.5px solid var(--border-default)",
+                          }} />
+                        )}
+                      </div>
+                      {/* Label */}
+                      <span style={{
+                        color: isDone ? "var(--text-tertiary)" : isActive ? "var(--text-primary)" : "var(--text-tertiary)",
+                        opacity: isPending ? 0.5 : 1,
+                        transition: "color 0.2s, opacity 0.2s",
+                      }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -457,6 +486,35 @@ function RightPanel({
   const stats = (profile?.statistics as Array<{ value: string; label: string }>) || [];
   const testimonials = (profile?.testimonials as Array<{ quote: string; author: string }>) || [];
   const primaryColor = generation.brandProfile?.primaryColor as string | undefined;
+  const pi = profile?.productIntelligence as {
+    productName?: string;
+    oneLiner?: string;
+    whatItDoes?: string;
+    productCategory?: string[];
+    productType?: string;
+    targetCustomers?: string;
+    businessModel?: string[];
+    pricing?: string;
+    keyFeatures?: string[];
+    primaryCTA?: string;
+    techSignals?: string[];
+  } | undefined;
+  const brandAssets = profile?.brandAssets as {
+    logoImgs?: string[];
+    favicon?: string;
+    ogImage?: string;
+    downloadedAssets?: Array<{
+      src: string;
+      localPath: string;
+      localUrl: string;
+      alt: string;
+      width: number;
+      height: number;
+      ext: string;
+      isGif: boolean;
+      inHero: boolean;
+    }>;
+  } | undefined;
 
   // Group images by schema
   const bySchema: Record<string, ImageResult[]> = {};
@@ -464,6 +522,12 @@ function RightPanel({
     if (!bySchema[img.schemaId]) bySchema[img.schemaId] = [];
     bySchema[img.schemaId].push(img);
   }
+
+  // Determine which images to show in Brand Assets section
+  // Prefer downloaded brand assets, fall back to ogImage
+  const downloadedAssets = brandAssets?.downloadedAssets ?? [];
+  const assetImagesToShow = downloadedAssets.filter((a) => a.localUrl || a.src).slice(0, 6);
+  const fallbackImage = brandAssets?.ogImage || "";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -521,7 +585,7 @@ function RightPanel({
           </div>
         )}
 
-        {/* Images grid */}
+        {/* Generated Images */}
         {generation.images.length > 0 && (
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 10 }}>
@@ -569,7 +633,184 @@ function RightPanel({
           </div>
         )}
 
-        {/* Color palette */}
+        {/* ── PRODUCT INTELLIGENCE ──────────────────────────────────── */}
+        {pi && (pi.oneLiner || pi.whatItDoes || (pi.keyFeatures && pi.keyFeatures.length > 0)) && (
+          <div style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+
+            {/* Overview */}
+            {(pi.oneLiner || pi.whatItDoes) && (
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
+                  Overview
+                </div>
+                {pi.oneLiner && (
+                  <p style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.55, margin: "0 0 8px", fontWeight: 500 }}>
+                    {pi.oneLiner}
+                  </p>
+                )}
+                {pi.whatItDoes && pi.whatItDoes !== pi.oneLiner && (
+                  <p style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.55, margin: 0 }}>
+                    {pi.whatItDoes}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Product Category + Type */}
+            {((pi.productCategory && pi.productCategory.length > 0) || pi.productType) && (
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
+                  Product Category
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: pi.productType ? 8 : 0 }}>
+                  {(pi.productCategory ?? []).map((cat, i) => (
+                    <span key={i} style={{
+                      fontSize: 10, color: "var(--text-secondary)", background: "var(--bg-overlay)",
+                      border: "1px solid var(--border-subtle)", borderRadius: 4,
+                      padding: "2px 7px", fontWeight: 500,
+                    }}>
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+                {pi.productType && (
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
+                    <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Product Type: </span>
+                    {pi.productType}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Target Customers */}
+            {pi.targetCustomers && (
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
+                  Target Customers
+                </div>
+                <p style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.55, margin: 0 }}>
+                  {pi.targetCustomers}
+                </p>
+              </div>
+            )}
+
+            {/* Business Model */}
+            {pi.businessModel && pi.businessModel.length > 0 && (
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
+                  Business Model
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {pi.businessModel.map((m, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-secondary)" }}>
+                      <span style={{ color: "var(--text-tertiary)", fontSize: 9 }}>•</span>
+                      {m}
+                    </div>
+                  ))}
+                </div>
+                {pi.pricing && (
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 8 }}>
+                    <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Pricing: </span>
+                    {pi.pricing}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Key Features */}
+            {pi.keyFeatures && pi.keyFeatures.length > 0 && (
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
+                  Key Features
+                </div>
+                <ol style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {pi.keyFeatures.slice(0, 6).map((f, i) => (
+                    <li key={i} style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                      {f}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* Primary CTA */}
+            {pi.primaryCTA && (
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
+                  Primary CTA
+                </div>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{pi.primaryCTA}</p>
+              </div>
+            )}
+
+            {/* Tech Signals */}
+            {pi.techSignals && pi.techSignals.length > 0 && (
+              <div style={{ padding: "14px 18px" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
+                  Tech Signals
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {pi.techSignals.slice(0, 8).map((sig, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, color: "var(--text-secondary)" }}>
+                      <span style={{ color: "var(--text-tertiary)", fontSize: 9, marginTop: 2 }}>•</span>
+                      {sig}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── BRAND ASSETS ─────────────────────────────────────────── */}
+        {(assetImagesToShow.length > 0 || fallbackImage) && (
+          <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 10 }}>
+              Brand Assets
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5 }}>
+              {assetImagesToShow.length > 0 ? (
+                assetImagesToShow.map((asset, i) => (
+                  <div key={i} style={{
+                    aspectRatio: "1", borderRadius: 7,
+                    background: "var(--bg-overlay)", border: "1px solid var(--border-subtle)",
+                    overflow: "hidden",
+                  }}>
+                    <img
+                      src={asset.localUrl || asset.src}
+                      alt={asset.alt || `Brand asset ${i + 1}`}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      onError={(e) => {
+                        // Fall back to original src if localUrl fails
+                        const img = e.currentTarget;
+                        if (img.src !== asset.src) img.src = asset.src;
+                      }}
+                    />
+                  </div>
+                ))
+              ) : fallbackImage ? (
+                <div style={{
+                  gridColumn: "span 3", borderRadius: 7,
+                  background: "var(--bg-overlay)", border: "1px solid var(--border-subtle)",
+                  overflow: "hidden", height: 80,
+                }}>
+                  <img
+                    src={fallbackImage}
+                    alt="Brand image"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </div>
+              ) : null}
+            </div>
+            {downloadedAssets.length > 0 && (
+              <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 8 }}>
+                {downloadedAssets.length} image{downloadedAssets.length !== 1 ? "s" : ""} collected from site
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── COLOR PALETTE ─────────────────────────────────────────── */}
         {palette.length > 0 && (
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
@@ -592,7 +833,7 @@ function RightPanel({
           </div>
         )}
 
-        {/* Tone */}
+        {/* ── BRAND TONE ────────────────────────────────────────────── */}
         {tone && (
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
@@ -616,7 +857,7 @@ function RightPanel({
           </div>
         )}
 
-        {/* Typography */}
+        {/* ── TYPOGRAPHY ────────────────────────────────────────────── */}
         {typo?.headline?.fontFamily && (
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
@@ -635,7 +876,7 @@ function RightPanel({
           </div>
         )}
 
-        {/* Statistics */}
+        {/* ── KEY STATISTICS ────────────────────────────────────────── */}
         {stats.length > 0 && (
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
@@ -654,7 +895,7 @@ function RightPanel({
           </div>
         )}
 
-        {/* Testimonials */}
+        {/* ── TESTIMONIALS ──────────────────────────────────────────── */}
         {testimonials.length > 0 && (
           <div style={{ padding: "14px 18px" }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 8 }}>
