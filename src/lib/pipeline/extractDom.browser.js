@@ -359,16 +359,47 @@ window.__orbExtract = function () {
 
   var logo = null;
 
-  var navImgs = Array.from(document.querySelectorAll(
-    "header img, nav img, [class*='logo'] img, [id*='logo'] img, [class*='brand'] img"
+  // Helper: returns true if an element is inside a customer/partner logo wall
+  // (e.g. HubSpot's "trusted by" section which contains eBay, Airbnb logos)
+  function isInLogoWall(el) {
+    var ancestor = el.parentElement;
+    var depth = 0;
+    while (ancestor && depth < 8) {
+      var cls = (ancestor.className || "").toLowerCase();
+      var id = (ancestor.id || "").toLowerCase();
+      var combined = cls + " " + id;
+      if (
+        combined.indexOf("customer") !== -1 ||
+        combined.indexOf("partner") !== -1 ||
+        combined.indexOf("client") !== -1 ||
+        combined.indexOf("logo-wall") !== -1 ||
+        combined.indexOf("logo-strip") !== -1 ||
+        combined.indexOf("logo-grid") !== -1 ||
+        combined.indexOf("logo-bar") !== -1 ||
+        combined.indexOf("social-proof") !== -1 ||
+        combined.indexOf("trusted") !== -1 ||
+        combined.indexOf("brands") !== -1 ||
+        combined.indexOf("marquee") !== -1
+      ) return true;
+      ancestor = ancestor.parentElement;
+      depth++;
+    }
+    return false;
+  }
+
+  // Priority 1: strict nav/header — must be a direct child of nav or header
+  var strictNavImgs = Array.from(document.querySelectorAll(
+    "header > a img, header > div img, nav > a img, nav > div img, " +
+    "[role='banner'] img, [class*='navbar'] img, [class*='nav-bar'] img, " +
+    "[class*='site-header'] img, [class*='top-bar'] img"
   ));
-  for (var nii = 0; nii < navImgs.length; nii++) {
-    var img = navImgs[nii];
+  for (var nii = 0; nii < strictNavImgs.length; nii++) {
+    var img = strictNavImgs[nii];
+    if (isInLogoWall(img)) continue;
     var imgW = img.naturalWidth;
     var imgH = img.naturalHeight;
     var imgSrc = img.src || "";
     if (!imgSrc || imgSrc.indexOf("data:") === 0) continue;
-    // SVG img tags often report naturalWidth/Height = 0 even when loaded
     var isSvgSrc = imgSrc.split("?")[0].toLowerCase().endsWith(".svg");
     if (!isSvgSrc && (imgW === 0 || imgH === 0)) continue;
     if (imgW > 600 || imgH > 300) continue;
@@ -377,11 +408,33 @@ window.__orbExtract = function () {
     break;
   }
 
+  // Priority 2: broader header/nav/logo class search — but still skip logo walls
+  if (!logo) {
+    var navImgs = Array.from(document.querySelectorAll(
+      "header img, nav img, [class*='logo'] img, [id*='logo'] img, [class*='brand'] img"
+    ));
+    for (var nii2 = 0; nii2 < navImgs.length; nii2++) {
+      var img2 = navImgs[nii2];
+      if (isInLogoWall(img2)) continue;
+      var imgW2 = img2.naturalWidth;
+      var imgH2 = img2.naturalHeight;
+      var imgSrc2 = img2.src || "";
+      if (!imgSrc2 || imgSrc2.indexOf("data:") === 0) continue;
+      var isSvgSrc2 = imgSrc2.split("?")[0].toLowerCase().endsWith(".svg");
+      if (!isSvgSrc2 && (imgW2 === 0 || imgH2 === 0)) continue;
+      if (imgW2 > 600 || imgH2 > 300) continue;
+      if (imgSrc2.indexOf("background") !== -1 || imgSrc2.indexOf("hero") !== -1 || imgSrc2.indexOf("banner") !== -1) continue;
+      logo = { type: "img", src: imgSrc2, alt: img2.alt, width: imgW2, height: imgH2, confidence: "high" };
+      break;
+    }
+  }
+
   if (!logo) {
     var navSvgs = Array.from(document.querySelectorAll(
       "header svg, nav svg, [class*='logo'] svg, [id*='logo'] svg"
     ));
     for (var nsi = 0; nsi < navSvgs.length; nsi++) {
+      if (isInLogoWall(navSvgs[nsi])) continue;
       var svgRect = navSvgs[nsi].getBoundingClientRect();
       if (svgRect.width > 400 || svgRect.height > 200) continue;
       logo = { type: "svg", outerHTML: navSvgs[nsi].outerHTML.slice(0, 800), confidence: "high" };

@@ -27,15 +27,13 @@ import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { runFullPipeline, runRenderOnly, type ImageResult } from "@/lib/pipeline/runPipeline";
+import { runFullPipeline, type ImageResult } from "@/lib/pipeline/runPipeline";
 import { uploadToR2 } from "@/lib/storage/r2";
 import { normalizeDomain } from "@/lib/utils/normalizeDomain";
 import type { BrandProfile } from "@/lib/pipeline/classifyBrand";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-const BRAND_CACHE_TTL_DAYS = 30;
 
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
@@ -154,78 +152,48 @@ export async function POST(req: NextRequest) {
           .set({ status: "processing", updatedAt: new Date() })
           .where(eq(generations.id, generationId));
 
-        // ── Brand cache lookup ──────────────────────────────────────────────────
+        // ── Always run the full pipeline — no brand cache ──────────────────────
+        // Caching is disabled: every pipeline fix must take effect immediately
+        // for all users. Re-introduce caching once the pipeline is stable.
         const domain = normalizeDomain(generation.brandUrl);
-        const staleCutoff = new Date(Date.now() - BRAND_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000);
-
-        const [existingBrand] = await db
-          .select()
-          .from(brands)
-          .where(eq(brands.domain, domain))
-          .limit(1);
+        console.log(`[generate] Running full pipeline for ${domain} (cache disabled)...`);
 
         let brandProfile: BrandProfile;
         let brandId: string;
 
-        const isFresh = existingBrand && existingBrand.scrapedAt > staleCutoff;
+        const { brandProfile: freshProfile, images: rawImages } = await runFullPipeline(
+          generation.brandUrl,
+          workDir,
+          emit
+        );
+        brandProfile = freshProfile;
 
-        if (isFresh) {
-          // Cache hit — use existing brand profile, skip scraping
-          console.log(`[generate] Brand cache hit for ${domain} (scraped ${existingBrand.scrapedAt.toISOString()})`);
-          emit({ type: "status", step: 1, total: 5, message: "Using cached brand profile..." });
-          brandProfile = existingBrand.brandProfile as unknown as BrandProfile;
-          brandId = existingBrand.id;
-
-          // Run render-only pipeline (skips extraction + classification)
-          const { images: rawImages } = await runRenderOnly(
-            brandProfile,
-            workDir,
-            emit
-          );
-
-          await _uploadAndFinalize(rawImages, generationId, brandId, subscription, emit);
-        } else {
-          // Cache miss or stale — run full pipeline
-          if (existingBrand) {
-            console.log(`[generate] Brand cache stale for ${domain}, re-scraping...`);
-          } else {
-            console.log(`[generate] No brand cache for ${domain}, scraping...`);
-          }
-
-          const { brandProfile: freshProfile, images: rawImages } = await runFullPipeline(
-            generation.brandUrl,
-            workDir,
-            emit
-          );
-          brandProfile = freshProfile;
-
-          // Upsert brand record
-          const now = new Date();
-          const [upsertedBrand] = await db
-            .insert(brands)
-            .values({
-              domain,
+        // Upsert brand record (kept for analytics/history, not for cache reads)
+        const now = new Date();
+        const [upsertedBrand] = await db
+          .insert(brands)
+          .values({
+            domain,
+            brandUrl: generation.brandUrl,
+            brandProfile: brandProfile as unknown as Record<string, unknown>,
+            scrapedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: brands.domain,
+            set: {
               brandUrl: generation.brandUrl,
               brandProfile: brandProfile as unknown as Record<string, unknown>,
               scrapedAt: now,
-              createdAt: now,
               updatedAt: now,
-            })
-            .onConflictDoUpdate({
-              target: brands.domain,
-              set: {
-                brandUrl: generation.brandUrl,
-                brandProfile: brandProfile as unknown as Record<string, unknown>,
-                scrapedAt: now,
-                updatedAt: now,
-              },
-            })
-            .returning({ id: brands.id });
+            },
+          })
+          .returning({ id: brands.id });
 
-          brandId = upsertedBrand.id;
+        brandId = upsertedBrand.id;
 
-          await _uploadAndFinalize(rawImages, generationId, brandId, subscription, emit);
-        }
+        await _uploadAndFinalize(rawImages, generationId, brandId, subscription, emit);
 
         emit({ type: "complete", generationId });
       } catch (err: unknown) {
