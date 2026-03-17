@@ -33,6 +33,21 @@ import type { EmitFn } from "./types";
 // Path to the plain-JS browser script (relative to this file at runtime)
 const BROWSER_SCRIPT_PATH = path.join(__dirname, "extractDom.browser.js");
 
+// Read the browser script content once at module load time.
+// We inject via addScriptTag({content}) rather than {path} so it works even
+// on pages with a strict Content-Security-Policy that blocks external scripts.
+function readBrowserScript(): string {
+  const candidates = [
+    BROWSER_SCRIPT_PATH,
+    path.join(process.cwd(), "src/lib/pipeline/extractDom.browser.js"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  }
+  throw new Error(`[extractDom] Browser script not found. Tried: ${candidates.join(", ")}`);
+}
+const BROWSER_SCRIPT_CONTENT = readBrowserScript();
+
 function getChromiumPath(): string | undefined {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     return process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -110,14 +125,7 @@ export async function extractDom(
   emit?: EmitFn
 ): Promise<Record<string, unknown>> {
 
-  // Read the browser script content from disk — this is plain JS, never compiled
-  const browserScriptPath = fs.existsSync(BROWSER_SCRIPT_PATH)
-    ? BROWSER_SCRIPT_PATH
-    : path.join(process.cwd(), "src/lib/pipeline/extractDom.browser.js");
-
-  if (!fs.existsSync(browserScriptPath)) {
-    throw new Error(`[extractDom] Browser script not found at: ${browserScriptPath}`);
-  }
+  // Browser script content is pre-loaded at module init (BROWSER_SCRIPT_CONTENT)
 
   emit?.({ type: "status", step: 1, total: 6, message: `Connecting to ${new URL(url).hostname}...` });
 
@@ -187,8 +195,10 @@ export async function extractDom(
 
     console.log("[extractDom] Injecting browser script...");
 
-    // Inject the plain-JS browser script — this assigns window.__orbExtract
-    await page.addScriptTag({ path: browserScriptPath });
+    // Inject the plain-JS browser script as inline content.
+    // Using {content} instead of {path} bypasses strict CSP on sites like Stripe/HubSpot
+    // that whitelist only specific script origins.
+    await page.addScriptTag({ content: BROWSER_SCRIPT_CONTENT });
 
     console.log("[extractDom] Running extraction...");
 

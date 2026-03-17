@@ -386,7 +386,7 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
       bgColor = rawBgColor;
     }
   }
-  // Fallback: look in the deduped palette
+  // Fallback 1: look in the deduped palette for background-context colors
   if (!bgColor) {
     for (const c of colors) {
       const ctx = c.contexts.join(" ").toLowerCase();
@@ -396,7 +396,17 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
       }
     }
   }
-  const bgLuminance = bgColor ? rgbToLuminance(bgColor) : 0.5;
+  // Fallback 2: use the highest-luminance color in the palette (most likely the page canvas).
+  // Most websites have light backgrounds; defaulting to 0.5 ("dark") produces wrong results
+  // for brands like HubSpot whose body background is transparent (rgba(0,0,0,0)).
+  if (!bgColor && colors.length > 0) {
+    const byLuminance = [...colors].sort(
+      (a, b) => rgbToLuminance(b.hex) - rgbToLuminance(a.hex)
+    );
+    bgColor = byLuminance[0].hex;
+  }
+  // Final fallback: assume light (0.9) — the vast majority of brand sites are light-background
+  const bgLuminance = bgColor ? rgbToLuminance(bgColor) : 0.9;
   const logoRendering = bgLuminance < 0.5 ? "white" : "dark";
 
   // Primary and accent colors
@@ -408,6 +418,38 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
   const primaryColor = sortedColors[0]?.hex ?? "#000000";
   const accentColor = sortedColors[1]?.hex ?? primaryColor;
 
+  // Build typography from discoveredFonts + fontElementMap (raw.typography is never set by
+  // the browser script — the actual data lives in raw.discoveredFonts and raw.fontElementMap).
+  const fontElementMap = (raw.fontElementMap as Record<string, string | null>) ?? {};
+  const discoveredFonts = (raw.discoveredFonts as Array<{ family: string; seenOn: string[]; score: number }>) ?? [];
+
+  // Headline font: prefer h1 element mapping, fall back to top-scored font seen on headings
+  const headlineFont =
+    fontElementMap["h1"] ||
+    fontElementMap["h2"] ||
+    fontElementMap["h3"] ||
+    discoveredFonts.find((f) => f.seenOn.some((s) => /h1|h2|h3|h4/.test(s)))?.family ||
+    discoveredFonts[0]?.family ||
+    null;
+
+  // Body font: prefer p/li element mapping, fall back to second-ranked font or body element
+  const bodyFontFamily =
+    fontElementMap["p"] ||
+    fontElementMap["li"] ||
+    fontElementMap["body"] ||
+    discoveredFonts.find((f) => f.seenOn.some((s) => /^(p|li|body|blockquote)$/.test(s)))?.family ||
+    discoveredFonts[1]?.family ||
+    headlineFont ||
+    null;
+
+  // CTA font: prefer button/nav mapping
+  const ctaFontFamily =
+    fontElementMap["button"] ||
+    fontElementMap["nav"] ||
+    headlineFont ||
+    null;
+
+  // Also check raw.typography for any legacy data (won't be present but safe to merge)
   const typo = (raw.typography as Record<string, Record<string, string>>) ?? {};
   const h1Font = typo.h1 ?? {};
   const bodyFont = typo.body ?? {};
@@ -465,7 +507,7 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
     },
     typography: {
       headline: {
-        fontFamily: h1Font.fontFamily ?? "sans-serif",
+        fontFamily: headlineFont ?? h1Font.fontFamily ?? "Inter",
         fontSize: h1Font.fontSize ?? "48px",
         fontWeight: h1Font.fontWeight ?? "700",
         lineHeight: h1Font.lineHeight ?? "1.1",
@@ -474,12 +516,15 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
         color: h1Font.color,
       },
       body: {
-        fontFamily: bodyFont.fontFamily ?? "sans-serif",
+        fontFamily: bodyFontFamily ?? bodyFont.fontFamily ?? "Inter",
         fontSize: bodyFont.fontSize ?? "16px",
         fontWeight: bodyFont.fontWeight ?? "400",
         lineHeight: bodyFont.lineHeight ?? "1.5",
       },
-      cta: (typo.cta as Record<string, string>) ?? {},
+      cta: {
+        fontFamily: ctaFontFamily ?? "Inter",
+        ...((typo.cta as Record<string, string>) ?? {}),
+      },
     },
     colorPalette: colors,
     primaryColor,

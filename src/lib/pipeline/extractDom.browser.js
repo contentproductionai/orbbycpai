@@ -305,6 +305,20 @@ window.__orbExtract = function () {
     } catch (e) {}
   }
 
+  // ─── Supplement with document.fonts (actually-loaded fonts) ──────────
+  // document.fonts contains every FontFace the browser has loaded. These are always
+  // real brand fonts (not system fallbacks), so we give them a strong score boost.
+  try {
+    if (document.fonts && document.fonts.forEach) {
+      document.fonts.forEach(function (fontFace) {
+        var fam = (fontFace.family || "").replace(/["']/g, "").trim();
+        if (!fam) return;
+        if (/^(serif|sans-serif|monospace|cursive|fantasy|system-ui|-apple-system|BlinkMacSystemFont|Segoe UI|Arial|Helvetica|Times New Roman|Times|Georgia|Courier New|Courier|Verdana|Tahoma|Trebuchet)$/i.test(fam)) return;
+        addFontScore(fam, "document.fonts", 5);
+      });
+    }
+  } catch (e) {}
+
   // Ranked list for Claude context
   var discoveredFonts = Object.entries(fontScoreMap)
     .sort(function (a, b) { return b[1].score - a[1].score; })
