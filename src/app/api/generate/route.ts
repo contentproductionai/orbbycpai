@@ -35,6 +35,31 @@ import type { BrandProfile } from "@/lib/pipeline/classifyBrand";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+/**
+ * Returns a clean, user-facing error message.
+ * Raw API errors ("500 {\"type\":\"error\"...") are never shown to users.
+ */
+function sanitizeErrorMessage(raw: string): string {
+  // Anthropic/OpenAI 5xx — transient server error
+  if (/^5\d\d /.test(raw) || /overloaded_error|Internal server error/i.test(raw)) {
+    return "Our AI provider is temporarily unavailable. Please try again in a moment.";
+  }
+  // Rate limit
+  if (/rate.?limit|429/i.test(raw)) {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+  // Auth / billing
+  if (/credit balance|api.?key|unauthorized|401|403/i.test(raw)) {
+    return "A configuration error occurred. Please contact support.";
+  }
+  // Puppeteer / scrape timeout
+  if (/timeout|navigation|net::/i.test(raw)) {
+    return "Could not load the website. Please check the URL and try again.";
+  }
+  // Generic fallback — still don't expose raw stack traces
+  return "Generation failed. Please try again. If this continues, contact support.";
+}
+
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
@@ -197,15 +222,16 @@ export async function POST(req: NextRequest) {
 
         emit({ type: "complete", generationId });
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error("[generate] Pipeline error:", message);
+        const rawMessage = err instanceof Error ? err.message : String(err);
+        console.error("[generate] Pipeline error:", rawMessage);
+        const userMessage = sanitizeErrorMessage(rawMessage);
         try {
           await db
             .update(generations)
-            .set({ status: "failed", errorMessage: message, updatedAt: new Date() })
+            .set({ status: "failed", errorMessage: rawMessage, updatedAt: new Date() })
             .where(eq(generations.id, generationId));
         } catch {}
-        emit({ type: "error", message });
+        emit({ type: "error", message: userMessage });
       } finally {
         clearInterval(keepaliveInterval);
         try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}

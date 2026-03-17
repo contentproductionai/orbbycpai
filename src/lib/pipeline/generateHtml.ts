@@ -1,16 +1,18 @@
 /**
  * Orb HTML Generator
- * Generates social media post HTML/CSS using Claude Opus.
- * Ported from generate_html.py
+ * Generates social media post HTML/CSS using Claude Opus with OpenAI GPT-4o fallback.
+ * Falls back to GPT-4o automatically when Anthropic returns 5xx errors after retries.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import * as fs from "fs";
 import * as path from "path";
 import type { BrandProfile } from "./classifyBrand";
 import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 
-const GENERATION_MODEL = "claude-opus-4-6";
+const ANTHROPIC_MODEL = "claude-opus-4-6";
+const OPENAI_FALLBACK_MODEL = "gpt-4o";
 
 const SYSTEM_PROMPT = `You are an elite social media creative director and front-end engineer. Your output is a single, self-contained HTML file that renders a pixel-perfect social media post.
 
@@ -125,46 +127,14 @@ function encodePhoto(photoPath: string): string {
   return `data:${mime};base64,${b64}`;
 }
 
-// ─── Main generator ───────────────────────────────────────────────────────────
+// ─── HTML post-processing ─────────────────────────────────────────────────────
 
-export async function generateHtml(
-  brandProfile: BrandProfile,
+function processHtml(
+  rawText: string,
   photoPath: string | null,
-  logoDataUri: string | null = null,
-  canvasWidth = 1080,
-  canvasHeight = 1350,
-  schemaDefinition = ""
-): Promise<string> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const brandSummary = buildCompactBrandSummary(brandProfile);
-  const hasLogo = logoDataUri !== null;
-
-  const userMessage = `Canvas: ${canvasWidth}px wide x ${canvasHeight}px tall
-Brand profile:
-${brandSummary}
-Logo available: ${hasLogo ? "YES — use LOGO_PLACEHOLDER as the img src" : "NO — use brand name as styled text instead of LOGO_PLACEHOLDER"}
-${photoPath ? "Photo: use PHOTO_PLACEHOLDER as the img src for the full-bleed background." : "No photo required for this schema."}
-Schema definition:
-${schemaDefinition}
-Generate the complete ${canvasWidth}x${canvasHeight}px HTML/CSS social media post. Reason about this brand's psychology — make it feel like their own design team created it. Return only the HTML document.`;
-
-  console.log(
-    `  Calling Claude API (${GENERATION_MODEL}) — ${canvasWidth}x${canvasHeight}...`
-  );
-
-  const message = await withAnthropicRetry(
-    () => client.messages.create({
-      model: GENERATION_MODEL,
-      max_tokens: 8192,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
-    }),
-    "generateHtml"
-  );
-
-  let html = (message.content[0] as { text: string }).text.trim();
-
+  logoDataUri: string | null
+): string {
+  let html = rawText.trim();
   // Strip markdown fences if present
   if (html.startsWith("```html")) html = html.slice(7);
   else if (html.startsWith("```")) html = html.slice(3);
@@ -185,4 +155,88 @@ Generate the complete ${canvasWidth}x${canvasHeight}px HTML/CSS social media pos
   }
 
   return html;
+}
+
+// ─── Provider check ───────────────────────────────────────────────────────────
+
+function isRetryableAnthropicError(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    const status = (err as { status?: number }).status;
+    if (status !== undefined && [500, 502, 503, 504, 529].includes(status)) return true;
+    const message = (err as { message?: string }).message ?? "";
+    if (/^5\d\d /.test(message)) return true;
+  }
+  return false;
+}
+
+// ─── Main generator ───────────────────────────────────────────────────────────
+
+export type GenerateHtmlResult = {
+  html: string;
+  provider: "anthropic" | "openai";
+};
+
+export async function generateHtml(
+  brandProfile: BrandProfile,
+  photoPath: string | null,
+  logoDataUri: string | null = null,
+  canvasWidth = 1080,
+  canvasHeight = 1350,
+  schemaDefinition = ""
+): Promise<GenerateHtmlResult> {
+  const brandSummary = buildCompactBrandSummary(brandProfile);
+  const hasLogo = logoDataUri !== null;
+
+  const userMessage = `Canvas: ${canvasWidth}px wide x ${canvasHeight}px tall
+Brand profile:
+${brandSummary}
+Logo available: ${hasLogo ? "YES — use LOGO_PLACEHOLDER as the img src" : "NO — use brand name as styled text instead of LOGO_PLACEHOLDER"}
+${photoPath ? "Photo: use PHOTO_PLACEHOLDER as the img src for the full-bleed background." : "No photo required for this schema."}
+Schema definition:
+${schemaDefinition}
+Generate the complete ${canvasWidth}x${canvasHeight}px HTML/CSS social media post. Reason about this brand's psychology — make it feel like their own design team created it. Return only the HTML document.`;
+
+  // ── Attempt 1: Anthropic Claude Opus ─────────────────────────────────────
+  try {
+    console.log(`  [anthropic] Calling ${ANTHROPIC_MODEL} — ${canvasWidth}x${canvasHeight}...`);
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const message = await withAnthropicRetry(
+      () => client.messages.create({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 8192,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+      "generateHtml"
+    );
+    const html = processHtml(
+      (message.content[0] as { text: string }).text,
+      photoPath,
+      logoDataUri
+    );
+    return { html, provider: "anthropic" };
+  } catch (anthropicErr) {
+    // Only fall back to OpenAI for 5xx errors — not auth/billing errors
+    if (!isRetryableAnthropicError(anthropicErr)) {
+      throw anthropicErr;
+    }
+    console.warn(
+      `  [anthropic] All retries exhausted (${(anthropicErr as { message?: string }).message ?? anthropicErr}). Falling back to OpenAI ${OPENAI_FALLBACK_MODEL}...`
+    );
+  }
+
+  // ── Attempt 2: OpenAI GPT-4o fallback ────────────────────────────────────
+  console.log(`  [openai] Calling ${OPENAI_FALLBACK_MODEL} — ${canvasWidth}x${canvasHeight}...`);
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const completion = await openai.chat.completions.create({
+    model: OPENAI_FALLBACK_MODEL,
+    max_tokens: 8192,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userMessage },
+    ],
+  });
+  const rawText = completion.choices[0]?.message?.content ?? "";
+  const html = processHtml(rawText, photoPath, logoDataUri);
+  return { html, provider: "openai" };
 }

@@ -16,7 +16,7 @@ import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 import { classifyBrand, type BrandProfile } from "./classifyBrand";
 import { classifyVisual } from "./classifyVisual";
 import type { EmitFn } from "./types";
-import { generateHtml } from "./generateHtml";
+import { generateHtml, type GenerateHtmlResult } from "./generateHtml";
 import { validateHtml } from "./guardrails";
 import {
   SCHEMA_BY_ID,
@@ -468,13 +468,13 @@ export async function runFullPipeline(
     const dims = SIZE_DIMENSIONS[primarySize];
 
     let html: string | null = null;
+    let generationProvider: GenerateHtmlResult["provider"] = "anthropic";
     let attempts = 0;
     const maxAttempts = 3;
-
     while (attempts < maxAttempts) {
       attempts++;
       try {
-        html = await generateHtml(
+        const result = await generateHtml(
           brandProfile,
           schema.requiresPhoto ? photoPath : null,
           logoDataUri,
@@ -482,10 +482,14 @@ export async function runFullPipeline(
           dims.height,
           schema.definition
         );
-
+        html = result.html;
+        generationProvider = result.provider;
+        if (result.provider !== "anthropic") {
+          console.warn(`  [fallback] Generation served by ${result.provider}`);
+        }
         const validation = validateHtml(html, dims.width, dims.height);
         if (validation.passed) {
-          console.log(`  Guardrails passed (attempt ${attempts})`);
+          console.log(`  Guardrails passed (attempt ${attempts}, provider: ${generationProvider})`);
           break;
         } else {
           console.warn(`  Guardrails failed (attempt ${attempts}):`, validation.failures);
@@ -500,9 +504,7 @@ export async function runFullPipeline(
         if (attempts === maxAttempts) throw e;
       }
     }
-
     if (!html) continue;
-
     // Save HTML
     const htmlPath = path.join(workDir, `${schemaId}.html`);
     fs.writeFileSync(htmlPath, html);
@@ -591,11 +593,10 @@ export async function runRenderOnly(
       let html: string | null = null;
       let attempts = 0;
       const maxAttempts = 3;
-
       while (attempts < maxAttempts) {
         attempts++;
         try {
-          html = await generateHtml(
+          const result = await generateHtml(
             brandProfile,
             schema.requiresPhoto ? photoPath : null,
             logoDataUri,
@@ -603,10 +604,13 @@ export async function runRenderOnly(
             dims.height,
             schema.definition
           );
-
+          html = result.html;
+          if (result.provider !== "anthropic") {
+            console.warn(`  [fallback] Generation served by ${result.provider}`);
+          }
           const validation = validateHtml(html, dims.width, dims.height);
           if (validation.passed) {
-            console.log(`  Guardrails passed (attempt ${attempts})`);
+            console.log(`  Guardrails passed (attempt ${attempts}, provider: ${result.provider})`);
             break;
           } else {
             console.warn(`  Guardrails failed (attempt ${attempts}):`, validation.failures);
