@@ -277,15 +277,34 @@ export async function resolveLogo(brandProfile: BrandProfile): Promise<string | 
     }
   }
 
-  // 2. Try favicon
+  // 2. Try logoSvgs (inline SVG elements captured from the nav/header)
+  // Convert outerHTML to a base64 SVG data URI — works for Stripe, Linear, etc.
+  for (const svgEntry of assets.logoSvgs) {
+    const outerHTML =
+      typeof svgEntry === "object"
+        ? (svgEntry as { outerHTML?: string }).outerHTML ?? ""
+        : String(svgEntry);
+    if (!outerHTML || !outerHTML.trim().startsWith("<svg")) continue;
+    // Ensure xmlns is present so the SVG renders correctly as a data URI
+    const svgWithNs = outerHTML.includes("xmlns=")
+      ? outerHTML
+      : outerHTML.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+    return bufferToDataUri(Buffer.from(svgWithNs, "utf8"), "image/svg+xml");
+  }
+
+  // 3. Favicon — last resort; skip .ico files and anything named "favicon"
+  //    (these are tiny generic icons, not brand logos)
   if (assets.favicon && assets.favicon.startsWith("http")) {
-    try {
-      const buf = await fetchBuffer(assets.favicon);
-      if (buf.length > 200) {
-        const mime = mimeFromUrl(assets.favicon);
-        return bufferToDataUri(buf, mime);
-      }
-    } catch {}
+    const favLower = assets.favicon.toLowerCase();
+    if (!favLower.includes(".ico") && !favLower.includes("favicon")) {
+      try {
+        const buf = await fetchBuffer(assets.favicon);
+        if (buf.length > 200) {
+          const mime = mimeFromUrl(assets.favicon);
+          return bufferToDataUri(buf, mime);
+        }
+      } catch {}
+    }
   }
 
   return null;

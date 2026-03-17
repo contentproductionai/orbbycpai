@@ -368,7 +368,9 @@ window.__orbExtract = function () {
     var imgH = img.naturalHeight;
     var imgSrc = img.src || "";
     if (!imgSrc || imgSrc.indexOf("data:") === 0) continue;
-    if (imgW === 0 || imgH === 0) continue;
+    // SVG img tags often report naturalWidth/Height = 0 even when loaded
+    var isSvgSrc = imgSrc.split("?")[0].toLowerCase().endsWith(".svg");
+    if (!isSvgSrc && (imgW === 0 || imgH === 0)) continue;
     if (imgW > 600 || imgH > 300) continue;
     if (imgSrc.indexOf("background") !== -1 || imgSrc.indexOf("hero") !== -1 || imgSrc.indexOf("banner") !== -1) continue;
     logo = { type: "img", src: imgSrc, alt: img.alt, width: imgW, height: imgH, confidence: "high" };
