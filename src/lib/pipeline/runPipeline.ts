@@ -12,6 +12,7 @@ import * as https from "https";
 import * as http from "http";
 import { execSync } from "child_process";
 import Anthropic from "@anthropic-ai/sdk";
+import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 import { classifyBrand, type BrandProfile } from "./classifyBrand";
 import { classifyVisual } from "./classifyVisual";
 import type { EmitFn } from "./types";
@@ -137,11 +138,14 @@ Rules:
 - Portrait orientation preferred (taller than wide)
 Return ONLY the query string, nothing else.`;
 
-  const response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 30,
-    messages: [{ role: "user", content: prompt }],
-  });
+  const response = await withAnthropicRetry(
+    () => client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 30,
+      messages: [{ role: "user", content: prompt }],
+    }),
+    "derivePexelsQuery"
+  );
 
   let query = (response.content[0] as { text: string }).text
     .trim()

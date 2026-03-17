@@ -26,6 +26,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
+import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 
 export interface ScoredColor {
   hex: string;
@@ -222,11 +223,14 @@ Respond with ONLY valid JSON, no explanation:
       });
     }
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      messages,
-    });
+    const response = await withAnthropicRetry(
+      () => client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages,
+      }),
+      "classifyVisual"
+    );
 
     responseText = (response.content[0] as { text: string }).text.trim();
   } catch (e) {

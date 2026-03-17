@@ -8,6 +8,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
 import * as path from "path";
 import type { BrandProfile } from "./classifyBrand";
+import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 
 const GENERATION_MODEL = "claude-opus-4-6";
 
@@ -152,12 +153,15 @@ Generate the complete ${canvasWidth}x${canvasHeight}px HTML/CSS social media pos
     `  Calling Claude API (${GENERATION_MODEL}) — ${canvasWidth}x${canvasHeight}...`
   );
 
-  const message = await client.messages.create({
-    model: GENERATION_MODEL,
-    max_tokens: 8192,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userMessage }],
-  });
+  const message = await withAnthropicRetry(
+    () => client.messages.create({
+      model: GENERATION_MODEL,
+      max_tokens: 8192,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    }),
+    "generateHtml"
+  );
 
   let html = (message.content[0] as { text: string }).text.trim();
 
