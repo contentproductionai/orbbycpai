@@ -292,21 +292,9 @@ export async function resolveLogo(brandProfile: BrandProfile): Promise<string | 
     return bufferToDataUri(Buffer.from(svgWithNs, "utf8"), "image/svg+xml");
   }
 
-  // 3. Favicon — last resort; skip .ico files and anything named "favicon"
-  //    (these are tiny generic icons, not brand logos)
-  if (assets.favicon && assets.favicon.startsWith("http")) {
-    const favLower = assets.favicon.toLowerCase();
-    if (!favLower.includes(".ico") && !favLower.includes("favicon")) {
-      try {
-        const buf = await fetchBuffer(assets.favicon);
-        if (buf.length > 200) {
-          const mime = mimeFromUrl(assets.favicon);
-          return bufferToDataUri(buf, mime);
-        }
-      } catch {}
-    }
-  }
-
+  // No logo found — return null so the template renders without a logo.
+  // Never fall back to the favicon: favicons are 16–32px browser icons,
+  // not brand logos, and using them destroys brand recognition.
   return null;
 }
 
