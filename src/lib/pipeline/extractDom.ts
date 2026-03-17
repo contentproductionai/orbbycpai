@@ -6,7 +6,7 @@
  *   - Navigate to URL
  *   - Scroll to trigger lazy-loaded content
  *   - Take screenshots
- *   - Inject extractDom.browser.js via page.addScriptTag (plain JS, no compilation)
+ *   - Inject extractDom.browser.js via page.evaluateOnNewDocument (CSP-safe)
  *   - Call window.__orbExtract() to run the browser-side extraction
  *   - Close browser
  *   - Download brand asset images (≥100px, not nav/header) to workDir
@@ -15,11 +15,14 @@
  * All browser-side extraction logic lives in extractDom.browser.js (plain JavaScript).
  * Classification of colors and fonts lives in classifyVisual.ts.
  *
- * WHY addScriptTag instead of page.evaluate(fn):
- *   page.evaluate(fn) serializes the function via fn.toString(). When tsx/esbuild
- *   compiles TypeScript, it injects __name() helpers for function name tracking.
- *   These helpers are not available in the browser context, causing ReferenceError.
- *   page.addScriptTag reads the file as-is from disk — no compilation, no helpers.
+ * WHY evaluateOnNewDocument instead of addScriptTag:
+ *   addScriptTag({content}) is blocked by strict CSPs (e.g. Stripe) that use
+ *   sha256-whitelisted script-src without unsafe-inline. The browser rejects the
+ *   injected script before it runs, so window.__orbExtract is never defined.
+ *
+ *   page.evaluateOnNewDocument() runs JavaScript in the page context BEFORE any
+ *   HTML/CSS/CSP is parsed — it is not subject to Content-Security-Policy at all.
+ *   This is the correct Puppeteer pattern for injecting code on CSP-strict sites.
  */
 
 import puppeteer from "puppeteer";
@@ -149,6 +152,11 @@ export async function extractDom(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
+    // Register the extraction function BEFORE navigation so it runs before CSP is applied.
+    // evaluateOnNewDocument is not subject to Content-Security-Policy — it runs in the
+    // page context before any HTML/CSS is parsed, making it safe on Stripe, HubSpot, etc.
+    await page.evaluateOnNewDocument(BROWSER_SCRIPT_CONTENT);
+
     try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
     } catch (e) {
@@ -193,14 +201,7 @@ export async function extractDom(
 
     emit?.({ type: "status", step: 3, total: 6, message: "Reading page copy and product signals..." });
 
-    console.log("[extractDom] Injecting browser script...");
-
-    // Inject the plain-JS browser script as inline content.
-    // Using {content} instead of {path} bypasses strict CSP on sites like Stripe/HubSpot
-    // that whitelist only specific script origins.
-    await page.addScriptTag({ content: BROWSER_SCRIPT_CONTENT });
-
-    console.log("[extractDom] Running extraction...");
+    console.log("[extractDom] Running extraction (function registered via evaluateOnNewDocument)...");
 
     // Call the extraction function — no serialization, no tsx helpers
     raw = await page.evaluate(() => {
