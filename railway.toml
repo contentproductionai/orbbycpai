@@ -3,5 +3,6 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "HOSTNAME=0.0.0.0 node .next/standalone/server.js"
+preDeployCommand = "node scripts/migrate.mjs"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
