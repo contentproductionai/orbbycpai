@@ -199,3 +199,112 @@ export type NewGeneration = typeof generations.$inferInsert;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type Brand = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;
+
+// ─── social_posts ─────────────────────────────────────────────────────────────
+// One row per post per brand. Upsert-safe via unique constraint on
+// (brand_id, platform, platform_post_id). data_source distinguishes
+// "apify" (pre-auth) from "graph_api" (post-auth).
+
+export const socialPosts = pgTable(
+  "social_posts",
+  {
+    id:             uuid("id").defaultRandom().primaryKey(),
+    brandId:        uuid("brand_id").notNull().references(() => brands.id, { onDelete: "cascade" }),
+    platform:       text("platform").notNull().default("instagram"),
+    platformPostId: text("platform_post_id").notNull(),
+    caption:        text("caption"),
+    mediaType:      text("media_type"),
+    mediaUrl:       text("media_url"),
+    permalink:      text("permalink"),
+    likesCount:     integer("likes_count"),
+    commentsCount:  integer("comments_count"),
+    postedAt:       timestamp("posted_at", { mode: "date" }),
+    dataSource:     text("data_source").notNull().default("apify"),
+    fetchedAt:      timestamp("fetched_at", { mode: "date" }).defaultNow().notNull(),
+    createdAt:      timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt:      timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqPost:    unique("social_posts_brand_platform_post_uniq")
+                   .on(table.brandId, table.platform, table.platformPostId),
+    brandIdx:    index("social_posts_brand_id_idx").on(table.brandId),
+    platformIdx: index("social_posts_platform_idx").on(table.platform),
+    postedAtIdx: index("social_posts_posted_at_idx").on(table.postedAt),
+    sourceIdx:   index("social_posts_data_source_idx").on(table.dataSource),
+  })
+);
+
+// ─── brand_social_insights ────────────────────────────────────────────────────
+// APPEND-ONLY. No updated_at column by design. Each row is one Claude analysis
+// run. Rows accumulate — never overwritten or deleted.
+//
+// insights JSONB v1 shape:
+//   copyRegister:       string   — e.g. "punchy and irreverent"
+//   activeCampaigns:    string[] — named campaigns detected in captions
+//   designMotifs:       string[] — visual patterns EXCLUDING text treatment
+//   textTreatments:     string[] — how text is rendered ON the image
+//                                  e.g. ["inline highlight bars", "color overlay behind copy",
+//                                        "full-bleed type at 80vw", "white text on dark pill"]
+//   photoStyle:         string   — compositional description for Nano Banana prompt
+//   topPerformingTheme: string | null — null when engagement data unavailable
+//   recommendations:    string[] — 3-5 actionable directives for the generation prompt
+
+export const brandSocialInsights = pgTable(
+  "brand_social_insights",
+  {
+    id:            uuid("id").defaultRandom().primaryKey(),
+    brandId:       uuid("brand_id").notNull().references(() => brands.id, { onDelete: "cascade" }),
+    platform:      text("platform").notNull().default("instagram"),
+    postCount:     integer("post_count").notNull(),
+    postsFrom:     timestamp("posts_from", { mode: "date" }),
+    postsTo:       timestamp("posts_to", { mode: "date" }),
+    dataSource:    text("data_source").notNull().default("apify"),
+    insights:      jsonb("insights").notNull(),
+    promptVersion: text("prompt_version").notNull().default("v1"),
+    modelUsed:     text("model_used").notNull(),
+    generationId:  uuid("generation_id"),
+    analyzedAt:    timestamp("analyzed_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    brandIdx:                index("brand_social_insights_brand_id_idx").on(table.brandId),
+    analyzedAtIdx:           index("brand_social_insights_analyzed_at_idx").on(table.analyzedAt),
+    platformIdx:             index("brand_social_insights_platform_idx").on(table.platform),
+    promptVersionIdx:        index("brand_social_insights_prompt_version_idx").on(table.promptVersion),
+    brandPlatformVersionIdx: index("brand_social_insights_brand_platform_version_idx")
+                               .on(table.brandId, table.platform, table.promptVersion),
+  })
+);
+
+// ─── New relations ────────────────────────────────────────────────────────────
+
+export const socialPostsRelations = relations(socialPosts, ({ one }) => ({
+  brand: one(brands, { fields: [socialPosts.brandId], references: [brands.id] }),
+}));
+
+export const brandSocialInsightsRelations = relations(brandSocialInsights, ({ one }) => ({
+  brand: one(brands, { fields: [brandSocialInsights.brandId], references: [brands.id] }),
+}));
+
+// ─── New types ────────────────────────────────────────────────────────────────
+
+export type SocialPost             = typeof socialPosts.$inferSelect;
+export type NewSocialPost          = typeof socialPosts.$inferInsert;
+export type BrandSocialInsight     = typeof brandSocialInsights.$inferSelect;
+export type NewBrandSocialInsight  = typeof brandSocialInsights.$inferInsert;
+
+// ─── NormalizedSocialPost — data-source-agnostic internal interface ───────────
+// Both the Apify fetcher and the future Graph API fetcher map to this type.
+// The Claude analysis layer only ever receives NormalizedSocialPost[].
+
+export interface NormalizedSocialPost {
+  platformPostId: string;
+  platform:       "instagram";
+  caption:        string | null;
+  mediaType:      "IMAGE" | "CAROUSEL_ALBUM" | "VIDEO" | "REEL" | null;
+  mediaUrl:       string | null;
+  permalink:      string | null;
+  likesCount:     number | null;
+  commentsCount:  number | null;
+  postedAt:       Date | null;
+  dataSource:     "apify" | "graph_api";
+}
