@@ -450,3 +450,109 @@ export async function generateFullCreativeBrief(
 
   return { strategy, copy, imageDirection };
 }
+
+// ─── Agent 0: Topic Generator ─────────────────────────────────────────────────
+
+/**
+ * PostTopic — one entry in the 10-topic plan produced by the Topic Generator.
+ */
+export interface PostTopic {
+  /** Short label for this topic, used in logs and filenames */
+  label: string;
+  /** The post angle this topic targets */
+  angle: "brand_awareness" | "product_feature" | "social_proof" | "educational" | "contextual";
+  /** The specific creative direction for this post — what story to tell */
+  direction: string;
+  /** The platform this post is primarily optimised for */
+  primaryPlatform: "instagram" | "linkedin" | "facebook" | "twitter";
+}
+
+const TOPIC_GENERATOR_SYSTEM = `You are a Social Content Strategist at a world-class creative agency. Your job is to produce a 10-post content plan for a brand — one plan that covers the full strategic spectrum of what a brand needs to say on social media.
+
+Each post must serve a distinct purpose. No two posts should tell the same story. Together, the 10 posts should feel like a complete month of social content: some build brand equity, some drive consideration, some convert.
+
+RULES:
+1. Cover all 5 post angles across the 10 posts. Suggested distribution:
+   - brand_awareness: 2 posts (emotional connection, brand story)
+   - product_feature: 3 posts (specific capabilities, use cases, differentiators)
+   - social_proof: 2 posts (results, community, testimonials — only if real data exists)
+   - educational: 2 posts (teach something valuable the audience doesn't know)
+   - contextual: 1 post (tie brand to a current moment, trend, or cultural context)
+2. If no real testimonials exist in the brand data, replace social_proof posts with additional product_feature or educational posts.
+3. Each direction must be SPECIFIC to this brand — not generic. Reference real features, real customer types, real use cases from the brand profile.
+4. Vary the primary platform across the 10 posts. Not all posts should target Instagram.
+5. The label must be 3–5 words, lowercase, suitable for use as a filename slug.
+
+Output ONLY valid JSON array. No markdown. Start with [ and end with ].`;
+
+/**
+ * Generate 10 strategically distinct post topics from the brand profile.
+ * This runs before any composition begins — it is the editorial plan for the generation.
+ */
+export async function generatePostTopics(
+  brandProfile: BrandProfile
+): Promise<PostTopic[]> {
+  const client = new Anthropic();
+
+  const pi = brandProfile.productIntelligence ?? {};
+  const stats = (brandProfile.statistics ?? [])
+    .map((s) => `${s.value} ${s.label}`)
+    .join(", ");
+  const testimonials = (brandProfile.testimonials ?? [])
+    .slice(0, 3)
+    .map((t) => `"${t.quote}" — ${t.author}`)
+    .join("\n");
+
+  const payload = `BRAND: ${brandProfile.meta?.brandName ?? "Unknown"}
+URL: ${brandProfile.meta?.url ?? ""}
+INDUSTRY: ${brandProfile.industryContext ?? ""}
+BRAND PERSONALITY: ${brandProfile.brandPersonality ?? ""}
+PRODUCT INTELLIGENCE:
+  One-liner: ${pi.oneLiner ?? ""}
+  What it does: ${pi.whatItDoes ?? ""}
+  Target customers: ${pi.targetCustomers ?? ""}
+  Key features: ${(pi.keyFeatures ?? []).join(", ")}
+  Primary CTA on site: ${pi.primaryCTA ?? ""}
+TONE SUMMARY: ${brandProfile.tone?.summary ?? ""}
+REAL STATISTICS (from website — use these, do not invent):
+${stats || "none found"}
+REAL TESTIMONIALS (from website — use these, do not invent):
+${testimonials || "none found"}
+---
+Produce a 10-post content plan for this brand. Output a JSON array of 10 objects:
+[
+  {
+    "label": "string (3-5 words, lowercase, filename-safe)",
+    "angle": "brand_awareness" | "product_feature" | "social_proof" | "educational" | "contextual",
+    "direction": "string (specific creative direction for this post — what story to tell, what to show)",
+    "primaryPlatform": "instagram" | "linkedin" | "facebook" | "twitter"
+  },
+  ...
+]`;
+
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 2048,
+    system: TOPIC_GENERATOR_SYSTEM,
+    messages: [{ role: "user", content: payload }],
+  });
+
+  const content = response.content[0];
+  if (content.type !== "text") throw new Error("Unexpected response from Topic Generator");
+
+  const cleaned = content.text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  try {
+    const topics = JSON.parse(cleaned) as PostTopic[];
+    if (!Array.isArray(topics) || topics.length === 0) {
+      throw new Error("Topic Generator returned empty array");
+    }
+    // Ensure exactly 10 topics
+    return topics.slice(0, 10);
+  } catch (e) {
+    throw new Error(`Topic Generator returned invalid JSON: ${(e as Error).message}\n\nRaw: ${content.text.slice(0, 500)}`);
+  }
+}

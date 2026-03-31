@@ -501,10 +501,15 @@ export function browserExtract(): Record<string, unknown> {
 
   const images = Array.from(document.querySelectorAll("img"))
     .filter((img) => {
-      if (img.naturalWidth < 200 || img.naturalHeight < 200) return false;
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      // Require meaningful image dimensions — filter out thumbnails, swatches, icons
+      if (w < 400 || h < 300) return false;
       if (img.closest("nav, header")) return false;
       const src = img.src ?? "";
       if (src.includes("data:") || src.includes("logo") || src.includes("icon") || src.includes("avatar")) return false;
+      // Skip near-square small images (product swatches, color chips)
+      if (w < 600 && h < 600 && Math.abs(w - h) < 80) return false;
       return true;
     })
     .map((img) => ({
@@ -514,7 +519,7 @@ export function browserExtract(): Record<string, unknown> {
       height: img.naturalHeight,
       inHero: !!img.closest('[class*="hero"], [class*="Hero"], section:first-of-type'),
     }))
-    .slice(0, 15);
+    .slice(0, 30);
 
   const bgImages = Array.from(document.querySelectorAll('[class*="hero"], [class*="Hero"], section, div'))
     .map((el) => {
@@ -526,7 +531,7 @@ export function browserExtract(): Record<string, unknown> {
       return null;
     })
     .filter(Boolean)
-    .slice(0, 5) as string[];
+    .slice(0, 10) as string[];
 
   const spatialFor = (selector: string) => {
     const el = document.querySelector(selector);

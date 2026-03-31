@@ -140,6 +140,7 @@ export async function extractDom(
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
+      "--ignore-certificate-errors",
     ],
   });
 
@@ -254,8 +255,8 @@ export async function extractDom(
     inHero: boolean;
   }> = [];
 
-  // Download up to 12 brand assets (hero first, then by position)
-  const toDownload = brandAssetImages.slice(0, 12);
+  // Download up to 30 brand assets (hero first, then by position)
+  const toDownload = brandAssetImages.slice(0, 30);
   for (let i = 0; i < toDownload.length; i++) {
     const asset = toDownload[i];
     if (!asset.src || asset.src.startsWith("data:")) continue;

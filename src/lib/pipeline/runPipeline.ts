@@ -1,11 +1,9 @@
 /**
  * Orb Pipeline — Main Orchestrator
- * URL → BrandProfile → Pexels photo → Claude HTML/CSS → Puppeteer PNG
- * Ported from run_pipeline.py + extract_dom.js + render_sizes.js
- * No Python. No subprocesses. Pure TypeScript.
+ * URL → BrandProfile → 4-Agent Compositor → 40 PNGs (10 topics × 4 sizes)
  */
 
-import puppeteer, { Browser } from "puppeteer";
+import puppeteer, { type Browser } from "puppeteer";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
@@ -16,14 +14,7 @@ import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 import { classifyBrand, extractDesignSignal, type BrandProfile } from "./classifyBrand";
 import { classifyVisual } from "./classifyVisual";
 import type { EmitFn } from "./types";
-import { generateHtml, type GenerateHtmlResult } from "./generateHtml";
-import { validateHtml } from "./guardrails";
-import {
-  SCHEMA_BY_ID,
-  SIZE_DIMENSIONS,
-  selectSchemas,
-  type Schema,
-} from "./schemas";
+import { runCompositorPipeline, SIZE_DIMENSIONS } from "./runCompositor";
 
 // ─── Chromium path resolution ────────────────────────────────────────────────
 
@@ -343,7 +334,7 @@ export async function renderSizes(
 
   try {
     for (const size of sizes) {
-      const dims = SIZE_DIMENSIONS[size];
+      const dims = SIZE_DIMENSIONS[size as keyof typeof SIZE_DIMENSIONS];
       if (!dims) continue;
 
       const page = await browser.newPage();
@@ -459,113 +450,24 @@ export async function runFullPipeline(
     JSON.stringify(brandProfile, null, 2)
   );
 
-  // Step 3: Fetch Pexels photo
-  console.log("[pipeline] Starting fetchPexelsPhoto...");
-  let photoPath: string | null = null;
-  try {
-    photoPath = await fetchPexelsPhoto(brandProfile, workDir, emit);
-    console.log("[pipeline] fetchPexelsPhoto complete:", photoPath);
-  } catch (e) {
-    console.warn("[pipeline] Pexels fetch failed:", (e as Error).message);
-  }
+  // Step 3: Run the 4-agent compositor pipeline
+  // Topic Generator → 10 topics → Creative Strategist → Social Copywriter → Image Director → Art Director
+  // Quality Evaluator gates each render — up to 3 retries per size
+  // Output: 10 topics × 4 sizes = 40 images
+  emit({ type: "status", step: 4, total: 5, message: "Running 4-agent compositor..." });
+  console.log("[pipeline] Starting compositor pipeline...");
 
-  // Step 4: Resolve logo
-  console.log("[pipeline] Starting resolveLogo...");
-  const logoDataUri = await resolveLogo(brandProfile);
-  console.log("[pipeline] resolveLogo complete");
+  const compositorResults = await runCompositorPipeline(brandProfile, workDir, emit);
 
-  // Step 5: Generate HTML + render for each schema
-  emit({ type: "status", step: 4, total: 5, message: "Generating posts with Claude..." });
-  const schemaIds = selectSchemas(brandProfile as unknown as Record<string, unknown>);
-  const images: ImageResult[] = [];
+  const images: ImageResult[] = compositorResults.map((r) => ({
+    schemaId: r.schemaId,
+    schemaName: r.topic.label,
+    size: r.size,
+    filePath: r.imagePath,
+    url: "", // will be set by the API route after copying to public dir
+  }));
 
-  // Launch a single shared Puppeteer browser for all schemas to save memory and startup time
-  console.log("[pipeline] Launching shared rendering browser...");
-  const sharedBrowser: Browser = await puppeteer.launch({
-    headless: true,
-    executablePath: getChromiumPath(),
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--font-render-hinting=none",
-      "--disable-web-security",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
-  });
-
-  try {
-  for (const schemaId of schemaIds) {
-    const schema: Schema = SCHEMA_BY_ID[schemaId];
-    if (!schema) continue;
-
-    emit({ type: "schema", schemaId, schemaName: schema.name });
-    console.log(`\n  Schema: ${schema.name}`);
-
-    // Generate for portrait first (primary size)
-    const primarySize = schema.sizes[0];
-    const dims = SIZE_DIMENSIONS[primarySize];
-
-    let html: string | null = null;
-    let generationProvider: GenerateHtmlResult["provider"] = "anthropic";
-    let attempts = 0;
-    const maxAttempts = 3;
-    while (attempts < maxAttempts) {
-      attempts++;
-      try {
-        const result = await generateHtml(
-          brandProfile,
-          schema.requiresPhoto ? photoPath : null,
-          logoDataUri,
-          dims.width,
-          dims.height,
-          schema.definition
-        );
-        html = result.html;
-        generationProvider = result.provider;
-        if (result.provider !== "anthropic") {
-          console.warn(`  [fallback] Generation served by ${result.provider}`);
-        }
-        const validation = validateHtml(html, dims.width, dims.height);
-        if (validation.passed) {
-          console.log(`  Guardrails passed (attempt ${attempts}, provider: ${generationProvider})`);
-          break;
-        } else {
-          console.warn(`  Guardrails failed (attempt ${attempts}):`, validation.failures);
-          if (attempts === maxAttempts) {
-            console.warn(`  Using last attempt despite failures`);
-          } else {
-            html = null;
-          }
-        }
-      } catch (e) {
-        console.error(`  Generation error (attempt ${attempts}):`, (e as Error).message);
-        if (attempts === maxAttempts) throw e;
-      }
-    }
-    if (!html) continue;
-    // Save HTML
-    const htmlPath = path.join(workDir, `${schemaId}.html`);
-    fs.writeFileSync(htmlPath, html);
-
-    // Render all sizes using the shared browser
-    const renderResults = await renderSizes(html, workDir, schemaId, schema.sizes, sharedBrowser);
-
-    for (const [size, filePath] of Object.entries(renderResults)) {
-      images.push({
-        schemaId,
-        schemaName: schema.name,
-        size,
-        filePath,
-        url: "", // will be set by the API route after copying to public dir
-      });
-      emit({ type: "image", schemaId, size, filePath });
-    }
-  }
-  } finally {
-    await sharedBrowser.close();
-  }
-
+  console.log(`[pipeline] Compositor complete: ${images.length} images`);
   emit({ type: "status", step: 5, total: 5, message: "Finalizing..." });
 
   return { brandProfile, images };
@@ -584,110 +486,18 @@ export async function runRenderOnly(
 
   emit({ type: "status", step: 1, total: 3, message: "Using cached brand profile..." });
 
-  // Step 1: Fetch Pexels photo
-  console.log("[pipeline:render-only] Starting fetchPexelsPhoto...");
-  let photoPath: string | null = null;
-  try {
-    photoPath = await fetchPexelsPhoto(brandProfile, workDir, emit);
-    console.log("[pipeline:render-only] fetchPexelsPhoto complete:", photoPath);
-  } catch (e) {
-    console.warn("[pipeline:render-only] Pexels fetch failed:", (e as Error).message);
-  }
+  // Run the 4-agent compositor pipeline (same as full pipeline, skips extraction)
+  emit({ type: "status", step: 2, total: 3, message: "Running 4-agent compositor..." });
+  const compositorResults = await runCompositorPipeline(brandProfile, workDir, emit);
 
-  // Step 2: Resolve logo
-  console.log("[pipeline:render-only] Starting resolveLogo...");
-  const logoDataUri = await resolveLogo(brandProfile);
-  console.log("[pipeline:render-only] resolveLogo complete");
-
-  // Step 3: Generate HTML + render for each schema
-  emit({ type: "status", step: 2, total: 3, message: "Generating posts with Claude..." });
-  const schemaIds = selectSchemas(brandProfile as unknown as Record<string, unknown>);
-  const images: ImageResult[] = [];
-
-  console.log("[pipeline:render-only] Launching shared rendering browser...");
-  const sharedBrowser: Browser = await puppeteer.launch({
-    headless: true,
-    executablePath: getChromiumPath(),
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--font-render-hinting=none",
-      "--disable-web-security",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
-  });
-
-  try {
-    for (const schemaId of schemaIds) {
-      const schema: Schema = SCHEMA_BY_ID[schemaId];
-      if (!schema) continue;
-
-      emit({ type: "schema", schemaId, schemaName: schema.name });
-      console.log(`\n  Schema: ${schema.name}`);
-
-      const primarySize = schema.sizes[0];
-      const dims = SIZE_DIMENSIONS[primarySize];
-
-      let html: string | null = null;
-      let attempts = 0;
-      const maxAttempts = 3;
-      while (attempts < maxAttempts) {
-        attempts++;
-        try {
-          const result = await generateHtml(
-            brandProfile,
-            schema.requiresPhoto ? photoPath : null,
-            logoDataUri,
-            dims.width,
-            dims.height,
-            schema.definition
-          );
-          html = result.html;
-          if (result.provider !== "anthropic") {
-            console.warn(`  [fallback] Generation served by ${result.provider}`);
-          }
-          const validation = validateHtml(html, dims.width, dims.height);
-          if (validation.passed) {
-            console.log(`  Guardrails passed (attempt ${attempts}, provider: ${result.provider})`);
-            break;
-          } else {
-            console.warn(`  Guardrails failed (attempt ${attempts}):`, validation.failures);
-            if (attempts === maxAttempts) {
-              console.warn(`  Using last attempt despite failures`);
-            } else {
-              html = null;
-            }
-          }
-        } catch (e) {
-          console.error(`  Generation error (attempt ${attempts}):`, (e as Error).message);
-          if (attempts === maxAttempts) throw e;
-        }
-      }
-
-      if (!html) continue;
-
-      const htmlPath = path.join(workDir, `${schemaId}.html`);
-      fs.writeFileSync(htmlPath, html);
-
-      const renderResults = await renderSizes(html, workDir, schemaId, schema.sizes, sharedBrowser);
-
-      for (const [size, filePath] of Object.entries(renderResults)) {
-        images.push({
-          schemaId,
-          schemaName: schema.name,
-          size,
-          filePath,
-          url: "",
-        });
-        emit({ type: "image", schemaId, size, filePath });
-      }
-    }
-  } finally {
-    await sharedBrowser.close();
-  }
+  const images: ImageResult[] = compositorResults.map((r) => ({
+    schemaId: r.schemaId,
+    schemaName: r.topic.label,
+    size: r.size,
+    filePath: r.imagePath,
+    url: "",
+  }));
 
   emit({ type: "status", step: 3, total: 3, message: "Finalizing..." });
-
   return { images };
 }
