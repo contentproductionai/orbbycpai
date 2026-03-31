@@ -206,6 +206,11 @@ For pexelsQuery: write a precise 3-5 word query that describes the EXACT type of
 - Match the subject matter AND the visual treatment (lighting, color temperature, composition style)
 - Examples: "author writing desk warm", "fly fishing river golden hour", "startup team whiteboard", "chef plating restaurant kitchen"
 - Never use generic mood words: "success", "motivation", "professional", "lifestyle" are all wrong
+- CRITICAL — Brand type determines photo type:
+  * Software/SaaS/Tech brands (B2B software, developer tools, cybersecurity, project management): query must target UI screenshots, people at computers, abstract tech, or team collaboration — NEVER physical environments, nature, or consumer lifestyle
+  * DTC/Consumer brands (apparel, food, outdoor gear, beauty, home goods): query must target product photography, lifestyle shots with the product, or people using the product in its natural context
+  * Professional services (consulting, finance, legal): query must target business environments, professional people, or relevant work contexts
+  * The dominantVisualType from the brand's design signal tells you what they actually show — use it
 
 For layoutStyle: recommend one of these based on the copy and brand:
 - "bold typographic" — headline dominates, minimal imagery, strong type hierarchy
@@ -253,6 +258,9 @@ BRAND VISUAL IDENTITY:
   Photography subjects: ${brandProfile.photography?.subject ?? ""}
   Primary color: ${brandProfile.primaryColor ?? ""}
   Accent color: ${brandProfile.accentColor ?? ""}
+  Industry: ${brandProfile.industryContext ?? ""}
+  Dominant visual type: ${brandProfile.designSignal?.dominantVisualType ?? ""}
+  Photography treatment: ${brandProfile.designSignal?.photographyTreatment ?? ""}
 
 ---
 Write social copy for this post. Output JSON:

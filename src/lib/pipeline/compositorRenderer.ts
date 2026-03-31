@@ -38,6 +38,76 @@ export function resolveImageMap(imageMap: Record<string, string>): Record<string
   return resolved;
 }
 
+// ─── Layer Sanitizer ──────────────────────────────────────────────────────────
+// Enforces hard constraints on layers before rendering.
+// This is the safety net — the Art Director prompt is the first line of defense,
+// the renderer is the last.
+
+export function sanitizeLayers(layers: Layer[], canvasWidth: number, canvasHeight: number): Layer[] {
+  // 1. Sort by zIndex ascending (back to front) — enforce correct render order
+  const sorted = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+
+  // 2. Enforce z-index uniqueness and ordering:
+  //    - background image: zIndex 1
+  //    - overlay shapes (darkening scrim): zIndex 2
+  //    - subject image: zIndex 3
+  //    - logo: zIndex 4 (above subject, below text)
+  //    - text layers: zIndex 5+
+  //    - CTA button shape: just below CTA text
+  //    - CTA text: highest zIndex
+  // We don't reassign zIndexes — we trust the Art Director — but we do enforce
+  // that no text layer has a lower zIndex than any background image layer.
+  const backgroundLayers = sorted.filter(
+    (l) => l.type === "image" && (l as { source: string }).source === "background"
+  );
+  const maxBackgroundZ = backgroundLayers.length > 0
+    ? Math.max(...backgroundLayers.map((l) => l.zIndex))
+    : 0;
+
+  const sanitized = sorted.map((layer) => {
+    // ── Text layers must always be above the background image ────────────────
+    if (layer.type === "text" && layer.zIndex <= maxBackgroundZ) {
+      console.warn(`[renderer] Text layer "${(layer as { content?: string }).content?.slice(0, 30)}" has zIndex ${layer.zIndex} ≤ background zIndex ${maxBackgroundZ} — bumping to ${maxBackgroundZ + 5}`);
+      return { ...layer, zIndex: maxBackgroundZ + 5 };
+    }
+
+    // ── Logo: enforce max bounding box ────────────────────────────────────────
+    // Logo layers must never exceed 200x70px (horizontal) or 70x70px (icon).
+    // We cap width/height here; the CSS uses object-fit: contain so the logo
+    // scales down proportionally without clipping.
+    if (layer.type === "image" && (layer as { source: string }).source === "logo") {
+      const logoLayer = layer as Layer & { width?: number; height?: number };
+      const maxW = 200;
+      const maxH = 70;
+      let w = logoLayer.width ?? maxW;
+      let h = logoLayer.height ?? maxH;
+      if (w > maxW || h > maxH) {
+        // Scale down proportionally
+        const scaleW = w > maxW ? maxW / w : 1;
+        const scaleH = h > maxH ? maxH / h : 1;
+        const scale = Math.min(scaleW, scaleH);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+        console.warn(`[renderer] Logo layer oversized — clamped to ${w}x${h}px`);
+      }
+      return { ...layer, width: w, height: h };
+    }
+
+    // ── Text layers: enforce maxWidth to prevent canvas overflow ─────────────
+    if (layer.type === "text") {
+      const textLayer = layer as Layer & { maxWidth?: number; x: number };
+      const impliedMaxWidth = canvasWidth - textLayer.x - 40;
+      if (!textLayer.maxWidth || textLayer.maxWidth > impliedMaxWidth) {
+        return { ...layer, maxWidth: Math.max(impliedMaxWidth, 100) };
+      }
+    }
+
+    return layer;
+  });
+
+  return sanitized;
+}
+
 // ─── HTML Builder ─────────────────────────────────────────────────────────────
 // Takes a Composition JSON and builds a deterministic, absolute-positioned HTML
 // document. This replaces the old LLM-generated HTML approach.
@@ -67,14 +137,24 @@ function renderLayer(layer: Layer, resolvedImageMap: Record<string, string>): st
 
     if (!src) return ""; // Skip layers with no image source
 
-    const objectFit = layer.objectFit ?? "cover";
+    const isLogo = layer.source === "logo";
+    // Logos always use contain so they scale to fit without clipping.
+    // Background and subject images use cover (or whatever the Art Director specified).
+    const objectFit = isLogo ? "contain" : (layer.objectFit ?? "cover");
     const filter = layer.filter ? `filter: ${layer.filter};` : "";
+
+    // For logo layers: use max-width/max-height with auto dimensions so the logo
+    // never overflows its bounding box regardless of intrinsic image size.
+    const logoConstraints = isLogo
+      ? `max-width: ${layer.width ?? 200}px; max-height: ${layer.height ?? 70}px; width: auto; height: auto;`
+      : "";
 
     return `<img
       src="${src}"
       style="${baseStyle}
         object-fit: ${objectFit};
         ${filter}
+        ${logoConstraints}
         display: block;
       "
     />`;
@@ -126,13 +206,18 @@ function renderLayer(layer: Layer, resolvedImageMap: Record<string, string>): st
 export function buildCompositionHtml(
   composition: Composition,
   imageMap: Record<string, string>,
-  fontFamilies: string[]
+  fontFamilies: string[],
+  canvasWidth?: number,
+  canvasHeight?: number
 ): string {
   // Pre-resolve all image paths to data URIs (Puppeteer cannot load local files)
   const resolvedImageMap = resolveImageMap(imageMap);
 
-  // Sort layers by zIndex ascending (back to front)
-  const sortedLayers = [...composition.layers].sort((a, b) => a.zIndex - b.zIndex);
+  const w = canvasWidth ?? composition.canvas.width;
+  const h = canvasHeight ?? composition.canvas.height;
+
+  // Sanitize layers: enforce z-index ordering, logo sizing, text overflow
+  const sanitizedLayers = sanitizeLayers(composition.layers, w, h);
 
   // Build Google Fonts URL for all unique font families
   const uniqueFonts = [...new Set(fontFamilies)];
@@ -143,7 +228,7 @@ export function buildCompositionHtml(
     ? `<link href="https://fonts.googleapis.com/css2?${fontsQuery}&display=swap" rel="stylesheet">`
     : "";
 
-  const layersHtml = sortedLayers.map((layer) => renderLayer(layer, resolvedImageMap)).join("\n");
+  const layersHtml = sanitizedLayers.map((layer) => renderLayer(layer, resolvedImageMap)).join("\n");
 
   return `<!DOCTYPE html>
 <html>
@@ -176,7 +261,13 @@ export async function renderComposition(
   outputPath: string,
   browser: Browser
 ): Promise<void> {
-  const html = buildCompositionHtml(composition, imageMap, fontFamilies);
+  const html = buildCompositionHtml(
+    composition,
+    imageMap,
+    fontFamilies,
+    composition.canvas.width,
+    composition.canvas.height
+  );
 
   const page = await browser.newPage();
   try {
