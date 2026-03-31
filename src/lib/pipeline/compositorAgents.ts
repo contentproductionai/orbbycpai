@@ -66,11 +66,12 @@ export interface SocialCopy {
 
 /**
  * FullCreativeBrief — the combined output passed to the Art Director.
- * Merges strategy + copy into one structured brief.
+ * Merges strategy + copy + image direction into one structured brief.
  */
 export interface FullCreativeBrief {
   strategy: CreativeStrategy;
   copy: SocialCopy;
+  imageDirection?: ImageDirectorResult;
 }
 
 // ─── Agent 1: Creative Strategist ────────────────────────────────────────────
@@ -297,7 +298,137 @@ Write social copy for this post. Output JSON:
   }
 }
 
-// ─── Combined: run both agents and return FullCreativeBrief ───────────────────
+// ─── Agent 3: Image Director ─────────────────────────────────────────────────
+
+/**
+ * ImageDirectorResult — output of the Image Director agent.
+ * Decides the image sourcing strategy and writes a Flux generation prompt.
+ */
+export interface ImageDirectorResult {
+  /** Whether to use a brand site image (if available) instead of generating */
+  useBrandImage: boolean;
+  /** Index into brandProfile.brandAssets.images to use (if useBrandImage is true) */
+  brandImageIndex: number;
+  /** The Flux generation prompt (used if useBrandImage is false or no brand images exist) */
+  fluxPrompt: string;
+  /** Pexels fallback query (used only if Flux fails) */
+  pexelsQuery: string;
+  /** Subject description for segmentation guidance */
+  subjectDescription: string;
+}
+
+const IMAGE_DIRECTOR_SYSTEM = `You are an Image Director at a world-class social media agency. Your job is to decide what visual will anchor a social media post — and either select an existing brand image or write a precise AI image generation prompt.
+
+You have two options:
+1. SELECT a brand image from the brand's own website (preferred when a suitable image exists)
+2. GENERATE a new image using Flux AI (when no suitable brand image exists, or when the concept requires something specific)
+
+For SELECTION: choose the image that best matches the creative concept. Prefer lifestyle/product images over abstract graphics. Avoid screenshots, UI mockups, or images with text already on them.
+
+For GENERATION: write a Flux prompt that produces a photorealistic commercial image. Your prompt must:
+- Describe the subject, environment, lighting, and composition precisely
+- Match the brand's actual visual world (not generic stock photo aesthetics)
+- Position the subject to leave space for text overlay (typically right-third or bottom-third)
+- Specify color temperature and mood that matches the brand's palette
+- Include negative prompts for things to avoid
+- Be 2-4 sentences, not a list of keywords
+
+Examples of GOOD Flux prompts:
+- "A woman in a teal blazer sits confidently on a throne of stacked paper documents, pointing upward, on a clean lavender studio background. Bright, editorial lighting. Shot from a low angle to convey authority. Leave the left third of frame empty for text."
+- "A fly fisherman in waders stands knee-deep in a golden-lit mountain river at dusk, casting a line. The water reflects amber and orange. Shot from behind, wide angle, leaving the upper half of frame as open sky for headline text."
+- "A developer's hands on a mechanical keyboard in a dark studio, dual monitors showing clean code in the background, soft blue ambient lighting. Close crop on hands, shallow depth of field."
+
+Examples of BAD Flux prompts:
+- "Professional business photo of success" (too generic)
+- "outdoor lifestyle adventure" (no subject, no composition)
+- "person using software" (no visual specificity)
+
+Output ONLY valid JSON. No markdown. Start with { and end with }.`;
+
+export async function generateImageDirection(
+  strategy: CreativeStrategy,
+  copy: SocialCopy,
+  brandProfile: BrandProfile
+): Promise<ImageDirectorResult> {
+  const client = new Anthropic();
+
+  // Build a list of available brand images for the agent to choose from
+  const brandImages = (brandProfile.brandAssets?.downloadedAssets ?? []).slice(0, 10);
+  const brandImageList = brandImages.length > 0
+    ? brandImages.map((img, i) => `  [${i}] ${img.alt || "(no alt)"} — ${img.src.slice(0, 80)} (${img.width}x${img.height})`).join("\n")
+    : "  (none available)";
+
+  const payload = `CREATIVE BRIEF:
+  Brand: ${brandProfile.meta?.brandName ?? "Unknown"}
+  Big Idea: ${strategy.bigIdea}
+  Visual concept: ${strategy.visualConcept}
+  Emotional register: ${strategy.emotionalRegister}
+  Color theme: ${strategy.colorTheme}
+  Layout style: ${copy.layoutStyle}
+  Headline: "${copy.headline}"
+
+BRAND VISUAL IDENTITY:
+  Photography style: ${brandProfile.photography?.style ?? ""}
+  Photography subjects: ${brandProfile.photography?.subject ?? ""}
+  Primary color: ${brandProfile.primaryColor ?? ""}
+  Industry: ${brandProfile.industryContext ?? ""}
+  Dominant visual type: ${brandProfile.designSignal?.dominantVisualType ?? ""}
+  Photography treatment: ${brandProfile.designSignal?.photographyTreatment ?? ""}
+
+AVAILABLE BRAND IMAGES (from their website — prefer these if suitable):
+${brandImageList}
+
+---
+Decide: should we use an existing brand image, or generate a new one?
+
+Rules:
+- Use a brand image (useBrandImage: true) if one of the available images closely matches the visual concept
+- Generate (useBrandImage: false) if no brand image fits, or if the concept requires a specific scene not present in brand assets
+- For software/SaaS brands: prefer generation for editorial concepts (like Vanta's "person on paper throne") over generic UI screenshots
+- For DTC/lifestyle brands: prefer brand images if they show the product in use
+- NEVER use a brand image that has text already on it
+- NEVER use a brand image that is a UI screenshot or product mockup (for non-software brands)
+
+Output JSON:
+{
+  "useBrandImage": boolean,
+  "brandImageIndex": number (index from the list above, or 0 if useBrandImage is false),
+  "fluxPrompt": "string (full generation prompt — required even if useBrandImage is true, as fallback)",
+  "pexelsQuery": "${copy.pexelsQuery}",
+  "subjectDescription": "string (brief description of the main subject for segmentation)"
+}`;
+
+  const response = await client.messages.create({
+    model: "claude-opus-4-5",
+    max_tokens: 1024,
+    system: IMAGE_DIRECTOR_SYSTEM,
+    messages: [{ role: "user", content: payload }],
+  });
+
+  const content = response.content[0];
+  if (content.type !== "text") throw new Error("Unexpected response from Image Director");
+
+  const cleaned = content.text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned) as ImageDirectorResult;
+  } catch (e) {
+    // Fallback: generate, don't use brand image
+    console.warn(`[ImageDirector] Failed to parse response, using fallback: ${(e as Error).message}`);
+    return {
+      useBrandImage: false,
+      brandImageIndex: 0,
+      fluxPrompt: `${strategy.visualConcept}, professional commercial photography, ${strategy.colorTheme === "dark" ? "dark moody lighting" : "bright natural lighting"}, subject positioned right-third of frame with space for text overlay on left`,
+      pexelsQuery: copy.pexelsQuery,
+      subjectDescription: strategy.visualConcept,
+    };
+  }
+}
+
+// ─── Combined: run all agents and return FullCreativeBrief ────────────────────
 
 export async function generateFullCreativeBrief(
   brandProfile: BrandProfile,
@@ -309,5 +440,13 @@ export async function generateFullCreativeBrief(
   // Step 2: Social Copywriter writes copy grounded in the strategy and real brand data
   const copy = await generateSocialCopy(strategy, brandProfile);
 
-  return { strategy, copy };
+  // Step 3: Image Director decides image sourcing strategy and writes Flux prompt
+  let imageDirection: ImageDirectorResult | undefined;
+  try {
+    imageDirection = await generateImageDirection(strategy, copy, brandProfile);
+  } catch (e) {
+    console.warn(`[ImageDirector] Agent failed, will use Pexels fallback: ${(e as Error).message}`);
+  }
+
+  return { strategy, copy, imageDirection };
 }

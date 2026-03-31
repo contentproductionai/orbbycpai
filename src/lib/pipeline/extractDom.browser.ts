@@ -54,7 +54,38 @@ export function browserExtract(): Record<string, unknown> {
     colorMap[hex] = { score: weight, sources: [source], totalArea: area };
   };
 
+  // ── Third-party widget filter ────────────────────────────────────────────
+  // These selectors match known third-party widgets injected into brand pages.
+  // Their colors must NEVER contaminate the brand's color palette.
+  const THIRD_PARTY_SELECTORS = [
+    // Accessibility widgets
+    "[id*='accessiBe']", "[class*='accessiBe']", "[id*='accessiway']", "[class*='accessiway']",
+    "[id*='userway']", "[class*='userway']", "[id*='audioeye']", "[class*='audioeye']",
+    "[id*='equalweb']", "[class*='equalweb']",
+    // Chat widgets
+    "[id*='intercom']", "[class*='intercom']", "[id*='drift']", "[class*='drift']",
+    "[id*='hubspot']", "[class*='hubspot']", "[id*='zendesk']", "[class*='zendesk']",
+    "[id*='freshchat']", "[class*='freshchat']", "[id*='crisp']", "[class*='crisp']",
+    // Cookie banners
+    "[id*='cookiebot']", "[class*='cookiebot']", "[id*='onetrust']", "[class*='onetrust']",
+    "[id*='cookie-consent']", "[class*='cookie-banner']",
+    // Shopify app widgets
+    "[id*='shopify-section-apps']", "[class*='shopify-app']",
+    // Generic third-party iframes
+    "iframe",
+  ];
+
+  const isThirdPartyElement = (el: Element): boolean => {
+    for (const sel of THIRD_PARTY_SELECTORS) {
+      try {
+        if (el.closest(sel)) return true;
+      } catch (_) { /* invalid selector — skip */ }
+    }
+    return false;
+  };
+
   const getBgColor = (el: Element) => {
+    if (isThirdPartyElement(el)) return null;
     const cs = window.getComputedStyle(el);
     const bg = cs.backgroundColor;
     if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return toHex(bg);
@@ -132,6 +163,7 @@ export function browserExtract(): Record<string, unknown> {
     "button, a, [role='button'], input[type='submit'], input[type='button']"
   ));
   for (const el of allButtons) {
+    if (isThirdPartyElement(el)) continue;
     const text = (el.textContent ?? "").trim();
     if (text.length === 0 || text.length > 50) continue;
     const rect = el.getBoundingClientRect();
@@ -310,9 +342,11 @@ export function browserExtract(): Record<string, unknown> {
 
   let logo: { type: string; src?: string; alt?: string; width?: number; height?: number; outerHTML?: string; confidence: string } | null = null;
 
+  // Score img candidates: prefer those with 'logo' in src/alt/class, reject obvious non-logos
   const navImgs = Array.from(document.querySelectorAll(
     "header img, nav img, [class*='logo'] img, [id*='logo'] img, [class*='brand'] img"
   ));
+  const scoredImgs: { img: HTMLImageElement; score: number }[] = [];
   for (const el of navImgs) {
     const img = el as HTMLImageElement;
     const w = img.naturalWidth;
@@ -320,20 +354,38 @@ export function browserExtract(): Record<string, unknown> {
     const src = img.src ?? "";
     if (!src || src.startsWith("data:")) continue;
     if (w === 0 || h === 0) continue;
+    // Reject images that are clearly not logos (too large, wrong aspect ratio)
     if (w > 600 || h > 300) continue;
-    if (src.includes("background") || src.includes("hero") || src.includes("banner")) continue;
-    logo = { type: "img", src, alt: img.alt, width: w, height: h, confidence: "high" };
-    break;
+    // Reject near-square large images (illustrations, not logos)
+    if (w > 200 && h > 200 && Math.abs(w / h - 1) < 0.4) continue;
+    if (src.includes("background") || src.includes("hero") || src.includes("banner") || src.includes("group") || src.includes("illustration")) continue;
+    let score = 0;
+    if (src.toLowerCase().includes("logo")) score += 10;
+    if ((img.alt ?? "").toLowerCase().includes("logo")) score += 10;
+    if ((img.className ?? "").toLowerCase().includes("logo")) score += 5;
+    // Prefer wide logos (typical brand logo aspect ratio)
+    if (w > h * 1.5) score += 3;
+    scoredImgs.push({ img, score });
+  }
+  scoredImgs.sort((a, b) => b.score - a.score);
+  if (scoredImgs.length > 0) {
+    const { img } = scoredImgs[0];
+    logo = { type: "img", src: img.src, alt: img.alt, width: img.naturalWidth, height: img.naturalHeight, confidence: "high" };
   }
 
   if (!logo) {
     const navSvgs = Array.from(document.querySelectorAll(
-      "header svg, nav svg, [class*='logo'] svg, [id*='logo'] svg"
+      "header svg, nav svg, [class*='logo'] svg, [id*='logo'] svg, a[href='/'] svg, a[href='#'] svg"
     ));
     for (const el of navSvgs) {
       const rect = el.getBoundingClientRect();
+      // Allow rect.width === 0 (SVG not yet painted / inside hidden container)
+      // Only skip if explicitly oversized
       if (rect.width > 400 || rect.height > 200) continue;
-      logo = { type: "svg", outerHTML: el.outerHTML.slice(0, 800), confidence: "high" };
+      const svgHtml = el.outerHTML;
+      // Skip tiny decorative SVGs (icons, chevrons) — real logos have meaningful path data
+      if (svgHtml.length < 50) continue;
+      logo = { type: "svg", outerHTML: svgHtml.slice(0, 8000), confidence: "high" };
       break;
     }
   }

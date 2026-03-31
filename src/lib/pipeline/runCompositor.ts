@@ -8,7 +8,7 @@ import {
   generateComposition,
   critiqueComposition,
 } from "./compositorGenerate";
-import { renderComposition } from "./compositorRenderer";
+import { renderHtml } from "./compositorRenderer";
 import { resolveLogo } from "./runPipeline";
 import { execSync } from "child_process";
 import type { BrandProfile } from "./classifyBrand";
@@ -33,7 +33,7 @@ function getChromiumPath(): string | undefined {
 
 export interface CompositorResult {
   imagePath: string;
-  composition: object;
+  composition: string; // HTML/CSS string
   critiqueScore: number;
   critiqueIssues: string[];
   brief: CreativeBrief;
@@ -60,7 +60,7 @@ export async function runCompositorPipeline(
   const topic = postTopic ?? "Brand awareness / hero content";
   const primarySize = SIZE_DIMENSIONS[sizes[0]] ?? SIZE_DIMENSIONS.portrait;
 
-  // ── Step 0: Generate Creative Brief ──────────────────────────────────────
+  // ── Step 0: Generate Creative Brief (4-agent pipeline) ───────────────────
   emit({ type: "status", step: 1, total: 6, message: "Writing creative brief..." });
   const brief = await generateCreativeBrief(brandProfile, topic);
   console.log(`[compositor] Creative brief generated:`);
@@ -68,14 +68,12 @@ export async function runCompositorPipeline(
   console.log(`  Emotional goal: ${brief.emotionalGoal}`);
   console.log(`  Headline: "${brief.headline}"`);
   console.log(`  Visual direction: ${brief.visualDirection}`);
-  console.log(`  Pexels query: "${brief.pexelsQuery}"`);
-  console.log(`  Color theme: ${brief.colorTheme}`);
   console.log(`  Layout style: ${brief.layoutStyle}`);
 
   // Save brief to disk for debugging
   fs.writeFileSync(path.join(workDir, "creative_brief.json"), JSON.stringify(brief, null, 2));
 
-  // ── Step 1: Source hero image (Pexels-first, Flux fallback) ──────────────
+  // ── Step 1: Source hero image (brand images → Flux → Pexels) ─────────────
   emit({ type: "status", step: 2, total: 6, message: "Sourcing hero image..." });
   const heroPath = await sourceHeroImage(brief, brandProfile, primarySize.width, primarySize.height, workDir);
 
@@ -85,12 +83,6 @@ export async function runCompositorPipeline(
 
   // ── Step 3: Resolve logo ──────────────────────────────────────────────────
   const logoDataUri = await resolveLogo(brandProfile);
-
-  const imageMap: Record<string, string> = {
-    background: segmented.backgroundPath,
-    subject: segmented.subjectPath,
-    logo: logoDataUri ?? "",
-  };
 
   // ── Step 4: Launch browser ────────────────────────────────────────────────
   const browser: Browser = await puppeteer.launch({
@@ -114,7 +106,7 @@ export async function runCompositorPipeline(
 
       let finalScore = 0;
       let finalIssues: string[] = [];
-      let finalComposition = null;
+      let finalHtml = "";
       let finalOutputPath = "";
       let attempt = 0;
       let critiqueIssues: string[] = [];
@@ -124,8 +116,8 @@ export async function runCompositorPipeline(
         attempt++;
         console.log(`[compositor] ${size} attempt ${attempt}/${MAX_RETRY_ATTEMPTS}...`);
 
-        // Generate composition (passes critique issues on retry)
-        const composition = await generateComposition(
+        // Art Director generates complete HTML/CSS
+        const html = await generateComposition(
           brandProfile,
           segmented,
           logoDataUri,
@@ -135,20 +127,18 @@ export async function runCompositorPipeline(
           attempt > 1 ? critiqueIssues : undefined
         );
 
-        // Extract font families for Google Fonts
-        const fontFamilies = composition.layers
-          .filter((l) => l.type === "text")
-          .map((l) => (l as { fontFamily: string }).fontFamily)
-          .filter(Boolean);
+        // Save HTML for debugging
+        const htmlPath = path.join(workDir, `compositor_${size}_attempt${attempt}.html`);
+        fs.writeFileSync(htmlPath, html);
 
-        // Render
+        // Render HTML → PNG
         const outputPath = path.join(workDir, `compositor_${size}_attempt${attempt}.png`);
-        await renderComposition(composition, imageMap, fontFamilies, outputPath, browser);
+        await renderHtml(html, outputPath, dims.width, dims.height, browser);
 
         emit({ type: "status", step: 5, total: 6, message: `Critiquing ${size} (attempt ${attempt})...` });
 
-        // Critique
-        const critique = await critiqueComposition(outputPath, composition, brandProfile, brief);
+        // Critique the rendered image
+        const critique = await critiqueComposition(outputPath, html, brandProfile, brief);
 
         console.log(`[compositor] ${size} attempt ${attempt}: score=${critique.score}/10, passed=${critique.passed}`);
         if (critique.issues.length > 0) {
@@ -157,7 +147,7 @@ export async function runCompositorPipeline(
 
         finalScore = critique.score;
         finalIssues = critique.issues;
-        finalComposition = composition;
+        finalHtml = html;
         finalOutputPath = outputPath;
 
         if (critique.passed) {
@@ -190,7 +180,7 @@ export async function runCompositorPipeline(
 
       results.push({
         imagePath: canonicalPath,
-        composition: finalComposition!,
+        composition: finalHtml,
         critiqueScore: finalScore,
         critiqueIssues: finalIssues,
         brief,
