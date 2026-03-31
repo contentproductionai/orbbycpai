@@ -5,7 +5,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-
+import * as fs from "fs";
 const CLASSIFICATION_MODEL = "claude-haiku-4-5-20251001";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,6 +28,33 @@ export interface ProductIntelligence {
   keyFeatures: string[];
   primaryCTA: string;
   techSignals: string[];
+}
+
+/**
+ * DesignSignal — extracted visual design patterns from the brand's website.
+ * Feeds the Art Director with real design context beyond just color/font tokens.
+ */
+export interface DesignSignal {
+  /** How the brand organizes content: "editorial", "grid", "hero-centric", "minimal", "feature-list" */
+  layoutPattern: string;
+  /** Visual weight distribution: "left-heavy", "centered", "asymmetric", "full-bleed" */
+  visualWeight: string;
+  /** Card/container style: "borderless", "subtle-border", "elevated-shadow", "glassmorphism", "solid-fill" */
+  cardStyle: string;
+  /** Button/CTA style: "pill", "rounded", "sharp", "ghost", "text-only" */
+  ctaStyle: string;
+  /** Dominant visual element type: "photography", "illustration", "UI-screenshot", "abstract", "typography-only" */
+  dominantVisualType: string;
+  /** Photography treatment: "full-bleed", "contained", "masked", "overlapping-text", "side-by-side" */
+  photographyTreatment: string;
+  /** Text overlay style: "none", "gradient-overlay", "solid-block", "floating-card", "direct-overlay" */
+  textOverlayStyle: string;
+  /** Overall design density: "sparse", "balanced", "dense" */
+  density: string;
+  /** Paths to downloaded brand photography samples (local file paths) */
+  photographySamples: string[];
+  /** Raw description of what the Art Director should know about this brand's visual system */
+  artDirectorNotes: string;
 }
 
 export interface BrandProfile {
@@ -89,6 +116,7 @@ export interface BrandProfile {
     bgImages: string[];
   };
   cssVars: Record<string, string>;
+  designSignal?: DesignSignal;
 }
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -358,6 +386,128 @@ Rules:
     console.error("[classifyBrand] JSON.parse failed. Raw response:", text.slice(0, 500));
     throw new Error(`Brand classification failed: LLM returned invalid JSON. ${(e as Error).message}`);
   }
+}
+
+// ─── Design Signal Extractor ─────────────────────────────────────────────────
+
+/**
+ * extractDesignSignal — analyzes the brand's website screenshot and downloaded
+ * assets to extract structured visual design patterns for the Art Director.
+ *
+ * This is a separate, optional enrichment step. It runs after classifyBrand()
+ * and attaches a designSignal to the BrandProfile.
+ */
+export async function extractDesignSignal(
+  screenshotPath: string,
+  downloadedAssets: Array<{ localPath: string; inHero: boolean; alt: string; width: number; height: number }>,
+  brandProfile: BrandProfile
+): Promise<DesignSignal> {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  // Read screenshot as base64
+  let screenshotBase64 = "";
+  let screenshotMediaType: "image/png" | "image/jpeg" = "image/jpeg";
+  try {
+    if (fs.existsSync(screenshotPath)) {
+      const buf = fs.readFileSync(screenshotPath);
+      screenshotBase64 = buf.toString("base64");
+      screenshotMediaType = screenshotPath.endsWith(".png") ? "image/png" : "image/jpeg";
+    }
+  } catch {
+    // Screenshot unavailable — fall back to text-only analysis
+  }
+
+  // Collect photography samples: hero images first, then others, max 5
+  const heroAssets = downloadedAssets.filter((a) => a.inHero && a.width >= 400);
+  const otherAssets = downloadedAssets.filter((a) => !a.inHero && a.width >= 400);
+  const photoSamples = [...heroAssets, ...otherAssets].slice(0, 5);
+  const photographySamples = photoSamples.map((a) => a.localPath);
+
+  // Build the vision prompt
+  const brandContext = `Brand: ${brandProfile.meta?.brandName ?? "Unknown"}
+Industry: ${brandProfile.industryContext ?? ""}
+Shape language: ${brandProfile.shapeLanguage?.classification ?? ""}
+Spatial philosophy: ${brandProfile.spatialPhilosophy?.classification ?? ""}
+Primary color: ${brandProfile.primaryColor ?? ""}
+Background luminance: ${(brandProfile.backgroundLuminance ?? 0.5) > 0.5 ? "light" : "dark"}`;
+
+  const systemPrompt = `You are a senior art director analyzing a brand's website screenshot to extract structured design signal.
+Your analysis will be used to brief a compositor who will create social media posts for this brand.
+Be precise and specific. Your job is to describe what you actually see, not what you think the brand aspires to.`;
+
+  const userContent: Anthropic.MessageParam["content"] = [];
+
+  // Add screenshot if available
+  if (screenshotBase64) {
+    userContent.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: screenshotMediaType,
+        data: screenshotBase64,
+      },
+    });
+  }
+
+  userContent.push({
+    type: "text",
+    text: `${brandContext}
+
+Analyze this website screenshot and return a JSON object describing the brand's visual design system.
+Be specific about what you actually observe — not what the brand says about itself.
+
+Return ONLY this JSON (no markdown, no explanation):
+{
+  "layoutPattern": "editorial|grid|hero-centric|minimal|feature-list",
+  "visualWeight": "left-heavy|centered|asymmetric|full-bleed",
+  "cardStyle": "borderless|subtle-border|elevated-shadow|glassmorphism|solid-fill",
+  "ctaStyle": "pill|rounded|sharp|ghost|text-only",
+  "dominantVisualType": "photography|illustration|UI-screenshot|abstract|typography-only",
+  "photographyTreatment": "full-bleed|contained|masked|overlapping-text|side-by-side",
+  "textOverlayStyle": "none|gradient-overlay|solid-block|floating-card|direct-overlay",
+  "density": "sparse|balanced|dense",
+  "artDirectorNotes": "2-3 sentences describing what makes this brand's visual system distinctive — what a compositor must know to make content that looks like it belongs on this brand's feed"
+}
+
+Rules:
+- Choose exactly one value per field from the options listed
+- artDirectorNotes must be specific to THIS brand, not generic design advice
+- If no screenshot is available, infer from the brand context provided`,
+  });
+
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 512,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userContent }],
+  });
+
+  const text = (response.content[0] as { text: string }).text.trim();
+  const match = text.match(/\{[\s\S]*\}/);
+  const jsonStr = match ? match[0] : text;
+
+  let parsed: Omit<DesignSignal, "photographySamples">;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    // Fallback: infer from brand profile tokens
+    parsed = {
+      layoutPattern: "hero-centric",
+      visualWeight: "centered",
+      cardStyle: brandProfile.shapeLanguage?.classification === "pill" ? "solid-fill" : "subtle-border",
+      ctaStyle: brandProfile.shapeLanguage?.classification === "pill" ? "pill" : "rounded",
+      dominantVisualType: brandProfile.photography?.style !== "none" ? "photography" : "typography-only",
+      photographyTreatment: "full-bleed",
+      textOverlayStyle: "gradient-overlay",
+      density: brandProfile.spatialPhilosophy?.classification === "expansive" ? "sparse" : "balanced",
+      artDirectorNotes: `${brandProfile.meta?.brandName ?? "Brand"} uses ${brandProfile.shapeLanguage?.classification ?? "rounded"} shapes, ${brandProfile.primaryColor ?? "brand"} as primary color, and ${brandProfile.photography?.style ?? "minimal"} photography.`,
+    };
+  }
+
+  return {
+    ...parsed,
+    photographySamples,
+  };
 }
 
 // ─── Main classifier ──────────────────────────────────────────────────────────

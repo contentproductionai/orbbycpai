@@ -13,7 +13,7 @@ import * as http from "http";
 import { execSync } from "child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
-import { classifyBrand, type BrandProfile } from "./classifyBrand";
+import { classifyBrand, extractDesignSignal, type BrandProfile } from "./classifyBrand";
 import { classifyVisual } from "./classifyVisual";
 import type { EmitFn } from "./types";
 import { generateHtml, type GenerateHtmlResult } from "./generateHtml";
@@ -264,7 +264,21 @@ export async function resolveLogo(brandProfile: BrandProfile): Promise<string | 
   // 1. Try logoImgs
   for (const logo of assets.logoImgs) {
     const src = typeof logo === "object" ? (logo as { src: string }).src : String(logo);
+    const storedW = typeof logo === "object" ? (logo as { width?: number }).width ?? 0 : 0;
+    const storedH = typeof logo === "object" ? (logo as { height?: number }).height ?? 0 : 0;
     if (!src) continue;
+    // Reject near-square large images — these are illustrations, not logos
+    // A real logo is either wide (wordmark) or small-square (icon mark)
+    // Reject if: both dimensions > 200px AND aspect ratio is close to 1:1 (0.6–1.6)
+    if (storedW > 200 && storedH > 200) {
+      const ar = storedW / storedH;
+      if (ar > 0.6 && ar < 1.6) {
+        console.log(`[resolveLogo] Skipping near-square image (${storedW}x${storedH}) — likely illustration, not logo`);
+        continue;
+      }
+    }
+    // Reject URLs that look like illustrations/hero images
+    if (/group|illustration|hero|banner|background|avatar/i.test(src)) continue;
     // Already a data URI — use directly
     if (src.startsWith("data:")) {
       return src;
@@ -415,6 +429,31 @@ export async function runFullPipeline(
   console.log("[pipeline] Starting classifyBrand...");
   const brandProfile = await classifyBrand(rawWithClassification);
   console.log("[pipeline] classifyBrand complete");
+
+  // Step 2b: Design signal extraction — analyzes screenshot to extract visual design patterns
+  // This enriches the BrandProfile with layout, card style, photography treatment, etc.
+  // The Art Director uses this to compose content that matches the brand's actual visual system.
+  try {
+    console.log("[pipeline] Starting extractDesignSignal...");
+    const screenshotPath = (raw.viewportScreenshotPath as string) ?? "";
+    const downloadedAssets = (brandProfile.brandAssets?.downloadedAssets ?? []) as Array<{
+      localPath: string;
+      inHero: boolean;
+      alt: string;
+      width: number;
+      height: number;
+    }>;
+    const designSignal = await extractDesignSignal(screenshotPath, downloadedAssets, brandProfile);
+    brandProfile.designSignal = designSignal;
+    console.log("[pipeline] extractDesignSignal complete:", {
+      layoutPattern: designSignal.layoutPattern,
+      dominantVisualType: designSignal.dominantVisualType,
+      density: designSignal.density,
+    });
+  } catch (e) {
+    console.warn("[pipeline] extractDesignSignal failed (non-fatal):", (e as Error).message);
+  }
+
   fs.writeFileSync(
     path.join(workDir, "brand_profile.json"),
     JSON.stringify(brandProfile, null, 2)
