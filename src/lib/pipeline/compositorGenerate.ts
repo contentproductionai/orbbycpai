@@ -336,7 +336,7 @@ CORE DESIGN RULES (non-negotiable):
 
 LAYOUT STYLES — implement these faithfully:
 - "full-bleed portrait": hero image fills entire canvas. Gradient scrim covers bottom 45% (transparent to brand background color). Logo top-left (48px from edges). Headline large (52-64px), bottom-left. Subheadline (18-20px) below headline. CTA button bottom-left or bottom-right. All text in content zone with 48px left/right padding.
-- "editorial split": canvas split vertically — image left 58%, solid brand color right 42%. Logo top of text panel (48px padding). Headline (44-56px bold) centered vertically in text panel. Subheadline (16-18px) below headline. CTA button near bottom of text panel. All text has 48px horizontal padding within the panel.
+- "editorial split": EXACTLY 2 columns — one image panel (left, 58% width) + one text panel (right, 42% width). The image panel is a single <div> with background-image: url(heroPath) covering the full left column. The text panel is a solid brand background color. Logo top of text panel (48px padding). Headline (44-56px bold) centered vertically in text panel. Subheadline (16-18px) below headline. CTA button near bottom of text panel. All text has 48px horizontal padding within the panel. NEVER create 3 columns. NEVER split the image into multiple panels.
 - "bold typographic": no hero photo. Brand color background (or white). Giant headline (72-96px) dominates center. Subheadline (20px) below. CTA button centered at bottom. Logo top-center or top-left.
 - "product showcase": product image prominent (center or right 50%). Copy panel on left or bottom with brand color background. Same text hierarchy as editorial split.
 - "quote card": large pull quote (48-64px) as the hero text, centered. Attribution or context below (16px). Brand color background or subtle image. Logo top.
@@ -400,7 +400,7 @@ Color theme: ${brief.colorTheme}
 Headline: "${brief.headline}"
 Subheadline: "${brief.subheadline}"
 Call to action: "${brief.callToAction}"
-${brief.keyStats.length > 0 ? `Key stat: ${brief.keyStats[0]}` : ""}
+${(brief.keyStats ?? []).length > 0 ? `Key stat: ${(brief.keyStats ?? [])[0]}` : ""}
 ${brief.keyQuote ? `Quote: "${brief.keyQuote}"` : ""}
 
 ## BRAND IDENTITY

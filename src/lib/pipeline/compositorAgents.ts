@@ -97,6 +97,8 @@ For postAngle, choose the most appropriate:
 
 For colorTheme: weight the brand's photography style, personality, and industry over the website background color. A brand with moody photography and a dark personality should be "dark" even if their website is white.
 
+For visualConcept: describe a SINGLE unified scene or subject — one moment, one location, one subject. NEVER describe split-screen, before/after, side-by-side, or multi-panel compositions. The layout system handles visual structure; your job is to describe what ONE image should show. Example: "A merino sheep grazing on a misty New Zealand hillside at golden hour" not "Split-screen of sheep on left and shoe on right."
+
 For socialVoice: describe HOW this brand communicates on social — their sentence structure, vocabulary level, use of humor or authority, length of posts. Be specific. "Professional but approachable" is not specific. "Short declarative sentences, no jargon, occasional dry wit, never uses exclamation points" is specific.
 
 Output ONLY valid JSON. No markdown. Start with { and end with }.`;
@@ -342,6 +344,11 @@ Examples of BAD Flux prompts:
 - "Professional business photo of success" (too generic)
 - "outdoor lifestyle adventure" (no subject, no composition)
 - "person using software" (no visual specificity)
+- "Split-screen showing X on left and Y on right" (NEVER use split-screen — the Art Director handles layout)
+- "Before/after comparison" (NEVER use comparison layouts — single scene only)
+- "Collage of images" (NEVER use collages — one unified scene)
+
+CRITICAL: Always generate a SINGLE unified scene or subject. Never describe split-screen, side-by-side, before/after, or multi-panel compositions. The Art Director handles layout; your job is to produce one beautiful image that fills the frame.
 
 Output ONLY valid JSON. No markdown. Start with { and end with }.`;
 
