@@ -30,12 +30,14 @@ import {
   generateVeoVideo,
 } from "./compositorGenerate";
 import { generatePostTopics, type PostTopic } from "./compositorAgents";
+import { runCarouselForTopic, type CarouselResult } from "./runCarousel";
 import { renderHtml } from "./compositorRenderer";
 import { resolveLogo } from "./runPipeline";
 import { execSync } from "child_process";
 import type { BrandProfile } from "./classifyBrand";
 import type { EmitFn } from "./types";
 import type { CreativeBrief } from "./compositorGenerate";
+import type { CreativeStrategy } from "./compositorAgents";
 
 const QUALITY_THRESHOLD = 7;
 const TOPIC_COUNT = 5;
@@ -64,6 +66,8 @@ function getChromiumPath(): string | undefined {
   return undefined;
 }
 
+export type { CarouselResult } from "./runCarousel";
+
 export interface CompositorResult {
   /** Absolute path to the final PNG */
   imagePath: string;
@@ -85,6 +89,8 @@ export interface CompositorResult {
   schemaId: string;
   /** Path to Veo-generated video (if generated) */
   videoPath?: string;
+  /** Carousel results for this topic (if generated) */
+  carouselResult?: CarouselResult;
 }
 
 /**
@@ -95,18 +101,19 @@ export interface CompositorResult {
  *   2. For each topic: run 4-agent pipeline → generate 4 sizes (no retries)
  *   3. Optional: Veo image-to-video using hero image as seed
  *
- * Returns up to 20 CompositorResult objects (5 topics × 4 sizes).
+ * Returns up to 20 CompositorResult objects (5 topics × 4 sizes), plus carousel results.
  * Emits progress events throughout for the SSE stream.
  */
 export async function runCompositorPipeline(
   brandProfile: BrandProfile,
   workDir: string,
   emit: EmitFn,
-  options?: { generateVideo?: boolean }
+  options?: { generateVideo?: boolean; generateCarousel?: boolean }
 ): Promise<CompositorResult[]> {
   fs.mkdirSync(workDir, { recursive: true });
   const allResults: CompositorResult[] = [];
   const generateVideo = options?.generateVideo ?? false;
+  const generateCarousel = options?.generateCarousel ?? true; // Carousel enabled by default
 
   // ── Step 0: Topic Generator — produce 5 distinct post topics ─────────────
   emit({ type: "status", step: 1, total: 7, message: "Planning content strategy..." });
@@ -259,7 +266,38 @@ export async function runCompositorPipeline(
         console.log(`[compositor] ${schemaId}: done`);
       }
 
-      // ── 3e. Optional: Veo image-to-video (uses hero image as seed) ───────
+      // ── 3e. Optional: Carousel generation (5 slides × 2 sizes) ──────────
+      if (generateCarousel) {
+        const carouselDir = path.join(topicDir, "carousel");
+        try {
+          // Extract the creative strategy from the brief for carousel copy generation
+          const strategy = (brief as CreativeBrief & { _fullBrief?: { strategy?: CreativeStrategy } })._fullBrief?.strategy;
+          if (strategy) {
+            const carouselResult = await runCarouselForTopic(
+              topic,
+              topicIndex,
+              strategy,
+              brandProfile,
+              logoDataUri,
+              carouselDir,
+              browser,
+              emit
+            );
+            // Attach carousel result to the portrait result for this topic
+            const portraitResult = allResults.find(r => r.topic.label === topic.label && r.size === "portrait");
+            if (portraitResult) {
+              portraitResult.carouselResult = carouselResult;
+            }
+            console.log(`[compositor] Carousel: ${carouselResult.slides.length} slides generated for topic ${topicIndex + 1}`);
+          } else {
+            console.warn(`[compositor] No strategy available for carousel — skipping topic ${topicIndex + 1}`);
+          }
+        } catch (e) {
+          console.warn(`[compositor] Carousel failed for topic ${topicIndex + 1}:`, (e as Error).message);
+        }
+      }
+
+      // ── 3f. Optional: Veo image-to-video (uses hero image as seed) ───────
       if (generateVideo && heroPath) {
         emit({ type: "status", step: 6, total: 7, message: `Generating video for ${topic.label}...` });
         try {

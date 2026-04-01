@@ -425,14 +425,14 @@ ${retryContext}
 Write the complete HTML document now. Use the exact copy from the creative brief. Make it stunning.`;
 
   // Retry on connection errors (transient network failures)
-  async function callWithRetry(attempt = 1): Promise<Awaited<ReturnType<typeof client.messages.create>>> {
+  async function callWithRetry(attempt = 1): Promise<Anthropic.Message> {
     try {
       return await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 4000,
         system: ART_DIRECTOR_SYSTEM,
         messages: [{ role: "user", content: userPrompt }],
-      });
+      }) as Anthropic.Message;
     } catch (err: unknown) {
       const msg = (err as { message?: string }).message ?? "";
       const isConnErr = msg.includes("Connection error") || msg.includes("ECONNRESET") || msg.includes("ETIMEDOUT") || msg.includes("fetch failed");
