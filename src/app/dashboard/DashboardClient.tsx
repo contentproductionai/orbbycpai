@@ -110,7 +110,7 @@ const EXTRACTION_STEPS = [
   { step: 3, label: "Reading page copy and product signals..." },
   { step: 4, label: "Collecting brand images..." },
   { step: 5, label: "Identifying tech stack..." },
-  { step: 6, label: "Classifying brand with AI..." },
+  { step: 6, label: "Building brand profile..." },
 ];
 
 // ─── New Generation Modal ─────────────────────────────────────────────────────
@@ -954,6 +954,44 @@ export default function DashboardClient({ user, generations: initialGenerations,
       prev?.id === generationId ? { ...prev, status: "processing" } : prev
     );
 
+    // Polling fallback: if the SSE stream drops mid-run (Railway proxy timeout),
+    // poll the DB every 8 seconds until the generation completes or fails.
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let streamSettled = false;
+
+    function startPolling() {
+      if (pollInterval) return;
+      pollInterval = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/generations?id=${generationId}`);
+          if (!r.ok) return;
+          const data = await r.json();
+          if (data.status === "complete") {
+            clearInterval(pollInterval!);
+            pollInterval = null;
+            const imgs = (data.images as ImageResult[]) ?? [];
+            setGenerations((prev) =>
+              prev.map((g) => g.id === generationId ? { ...g, status: "complete", images: imgs } : g)
+            );
+            setSelectedGen((prev) =>
+              prev?.id === generationId ? { ...prev, status: "complete", images: imgs } : prev
+            );
+            setIsGenerating(false);
+          } else if (data.status === "failed") {
+            clearInterval(pollInterval!);
+            pollInterval = null;
+            setGenerations((prev) =>
+              prev.map((g) => g.id === generationId ? { ...g, status: "failed", errorMessage: data.errorMessage } : g)
+            );
+            setSelectedGen((prev) =>
+              prev?.id === generationId ? { ...prev, status: "failed", errorMessage: data.errorMessage } : prev
+            );
+            setIsGenerating(false);
+          }
+        } catch {}
+      }, 8000);
+    }
+
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -971,7 +1009,11 @@ export default function DashboardClient({ user, generations: initialGenerations,
       }
 
       const reader = res.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        // No stream — fall back to polling immediately
+        startPolling();
+        return;
+      }
 
       const decoder = new TextDecoder();
       let buffer = "";
@@ -1011,20 +1053,25 @@ export default function DashboardClient({ user, generations: initialGenerations,
             }
 
             if (event.type === "complete") {
+              streamSettled = true;
+              if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+              const imgs = (event.images as ImageResult[]) ?? [];
               setGenerations((prev) =>
                 prev.map((g) =>
-                  g.id === generationId ? { ...g, status: "complete", images: event.images } : g
+                  g.id === generationId ? { ...g, status: "complete", images: imgs } : g
                 )
               );
               setSelectedGen((prev) =>
                 prev?.id === generationId
-                  ? { ...prev, status: "complete", images: event.images }
+                  ? { ...prev, status: "complete", images: imgs }
                   : prev
               );
               setIsGenerating(false);
             }
 
             if (event.type === "error") {
+              streamSettled = true;
+              if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
               setGenerations((prev) =>
                 prev.map((g) =>
                   g.id === generationId ? { ...g, status: "failed", errorMessage: event.message } : g
@@ -1040,8 +1087,16 @@ export default function DashboardClient({ user, generations: initialGenerations,
           } catch {}
         }
       }
+
+      // Stream ended without a complete/error event — start polling
+      if (!streamSettled) {
+        startPolling();
+      }
     } catch {
-      setIsGenerating(false);
+      // Network error — start polling so the user isn't stuck
+      if (!streamSettled) {
+        startPolling();
+      }
     }
   }
 

@@ -131,11 +131,11 @@ export async function runCompositorPipeline(
   fs.writeFileSync(path.join(workDir, "topic_plan.json"), JSON.stringify(topics, null, 2));
 
   // ── Step 1: Resolve logo once (shared across all topics) ─────────────────
-  emit({ type: "status", step: 2, total: 7, message: "Resolving brand assets..." });
+  emit({ type: "status", step: 2, total: 7, message: "Loading brand assets..." });
   const logoDataUri = await resolveLogo(brandProfile);
 
   // ── Step 2: Launch a single shared browser for all renders ───────────────
-  emit({ type: "status", step: 3, total: 7, message: "Launching render engine..." });
+  emit({ type: "status", step: 3, total: 7, message: "Preparing renderer..." });
   console.log("[compositor] Launching shared browser...");
   const browser: Browser = await puppeteer.launch({
     headless: true,
@@ -197,7 +197,7 @@ export async function runCompositorPipeline(
         const dims = SIZE_DIMENSIONS[size];
         const schemaId = `post${topicIndex + 1}_${size}`;
 
-        emit({ type: "status", step: 5, total: 7, message: `Composing ${topic.label} · ${size}...` });
+        emit({ type: "status", step: 5, total: 7, message: `Creating ${topic.label} · ${size}...` });
 
         let finalScore = 0;
         let finalIssues: string[] = [];
@@ -241,7 +241,7 @@ export async function runCompositorPipeline(
             continue;
           }
 
-          emit({ type: "status", step: 6, total: 7, message: `Quality check: ${topic.label} · ${size} (attempt ${attempt})...` });
+          emit({ type: "status", step: 6, total: 7, message: `Reviewing ${topic.label} · ${size}...` });
 
           // Quality Evaluator
           let critique: Awaited<ReturnType<typeof critiqueComposition>>;

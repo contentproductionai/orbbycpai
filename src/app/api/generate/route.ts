@@ -218,9 +218,9 @@ export async function POST(req: NextRequest) {
 
         brandId = upsertedBrand.id;
 
-        await _uploadAndFinalize(rawImages, generationId, brandId, subscription, emit);
+        const finalImages = await _uploadAndFinalize(rawImages, generationId, brandId, subscription, emit);
 
-        emit({ type: "complete", generationId });
+        emit({ type: "complete", generationId, images: finalImages });
       } catch (err: unknown) {
         const rawMessage = err instanceof Error ? err.message : String(err);
         console.error("[generate] Pipeline error:", rawMessage);
@@ -252,7 +252,7 @@ export async function POST(req: NextRequest) {
           const publicUrl = await uploadToR2(img.filePath, key);
           const finalImg: ImageResult = { ...img, url: publicUrl };
           finalImages.push(finalImg);
-          emitFn({ type: "image", schemaId: img.schemaId, size: img.size, url: publicUrl });
+          emitFn({ type: "image", schemaId: img.schemaId, schemaName: img.schemaName, size: img.size, url: publicUrl });
         }
 
         await db
@@ -274,6 +274,8 @@ export async function POST(req: NextRequest) {
             })
             .where(eq(subscriptions.id, subscription.id));
         }
+
+        return finalImages;
       }
     },
   });
