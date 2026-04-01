@@ -570,22 +570,60 @@ function RightPanel({
         )}
 
         {/* Generation progress */}
-        {isGenerating && (
-          <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 10 }}>
-              Generating
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {generationEvents.slice(-6).map((ev, i) => (
-                <div key={i} style={{ fontSize: 11, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                  {ev.type === "status" && <><span style={{ color: "var(--brand-primary)", opacity: 0.6 }}>◎</span><span>{ev.message}</span></>}
-                  {ev.type === "schema" && <><span style={{ color: "var(--brand-primary)" }}>✦</span><span>Schema: {ev.schemaName}</span></>}
-                  {ev.type === "image" && <><span style={{ color: "var(--success)" }}>✓</span><span>{ev.schemaName} · {ev.size}</span></>}
+        {isGenerating && (() => {
+          const TOTAL_IMAGES = 20; // 5 topics × 4 sizes
+          const completedImages = generationEvents.filter(ev => ev.type === "image").length;
+          // Before first image: animate progress based on status event count (caps at 40%)
+          // After first image: track real progress
+          const progressPct = completedImages === 0
+            ? Math.min(40, generationEvents.filter(ev => ev.type === "status").length * 4)
+            : Math.min(99, Math.round((completedImages / TOTAL_IMAGES) * 100));
+          const lastStatus = [...generationEvents].reverse().find(ev => ev.type === "status");
+          const lastImage = [...generationEvents].reverse().find(ev => ev.type === "image");
+          const statusText = lastImage
+            ? `${completedImages} of ${TOTAL_IMAGES} images ready`
+            : (lastStatus?.message ?? "Starting...");
+          return (
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+              {/* Header row */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)" }}>
+                  Generating
                 </div>
-              ))}
+                <div style={{ fontSize: 10, color: "var(--text-tertiary)", fontVariantNumeric: "tabular-nums" }}>
+                  {completedImages}/{TOTAL_IMAGES}
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div style={{ height: 3, background: "var(--bg-overlay)", borderRadius: 2, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{
+                  height: "100%",
+                  width: `${progressPct}%`,
+                  background: "var(--brand-primary)",
+                  boxShadow: "0 0 8px var(--brand-glow)",
+                  borderRadius: 2,
+                  transition: "width 0.6s ease",
+                }} />
+              </div>
+              {/* Current status text */}
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-primary)", boxShadow: "0 0 5px var(--brand-glow)", display: "inline-block", flexShrink: 0, animation: "pulse-glow 1.5s infinite" }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{statusText}</span>
+              </div>
+              {/* Last completed images */}
+              {completedImages > 0 && (
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 3 }}>
+                  {generationEvents.filter(ev => ev.type === "image").slice(-3).map((ev, i) => (
+                    <div key={i} style={{ fontSize: 10, color: "var(--text-tertiary)", display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--success)", fontSize: 9 }}>✓</span>
+                      <span>{ev.schemaName} · {ev.size}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Generated Images */}
         {generation.images.length > 0 && (
