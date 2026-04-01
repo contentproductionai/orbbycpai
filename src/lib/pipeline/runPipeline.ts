@@ -1,6 +1,6 @@
 /**
  * Orb Pipeline — Main Orchestrator
- * URL → BrandProfile → 4-Agent Compositor → 40 PNGs (10 topics × 4 sizes)
+ * URL → BrandProfile → 4-Agent Compositor → 20 PNGs (5 topics × 4 sizes)
  */
 
 import puppeteer, { type Browser } from "puppeteer";
@@ -451,9 +451,9 @@ export async function runFullPipeline(
   );
 
   // Step 3: Run the 4-agent compositor pipeline
-  // Topic Generator → 10 topics → Creative Strategist → Social Copywriter → Image Director → Art Director
-  // Quality Evaluator gates each render — up to 3 retries per size
-  // Output: 10 topics × 4 sizes = 40 images
+  // Topic Generator → 5 topics → Creative Strategist → Social Copywriter → Image Director → Art Director
+  // Quality check is informational — no retries
+  // Output: 5 topics × 4 sizes = 20 images
   emit({ type: "status", step: 4, total: 5, message: "Generating content..." });
   console.log("[pipeline] Starting compositor pipeline...");
 

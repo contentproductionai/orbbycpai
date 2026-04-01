@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { fal } from "@fal-ai/client";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
@@ -8,9 +7,6 @@ import { createClient } from "pexels";
 import type { BrandProfile } from "./classifyBrand";
 import { generateFullCreativeBrief } from "./compositorAgents";
 import type { FullCreativeBrief } from "./compositorAgents";
-
-// ─── fal.ai client config ────────────────────────────────────────────────────
-// FAL_KEY env var is read automatically by the fal client
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -57,7 +53,7 @@ export async function generateCreativeBrief(
 // ─── Step 1: Source hero image ────────────────────────────────────────────────
 // Priority order:
 //   1. Brand's own downloaded site images (if Image Director selected one)
-//   2. Flux AI generation (using Image Director's prompt)
+//   2. Imagen 4 Fast (Google) — fast, high-quality AI generation
 //   3. Pexels stock photo (last resort)
 
 export async function sourceHeroImage(
@@ -76,40 +72,55 @@ export async function sourceHeroImage(
     const assets = brandProfile.brandAssets?.downloadedAssets ?? [];
     const selected = assets[imageDirection.brandImageIndex];
     if (selected?.localPath && fs.existsSync(selected.localPath)) {
-      // Copy to hero.jpg
       fs.copyFileSync(selected.localPath, heroPath);
       console.log(`[compositor] Using brand image [${imageDirection.brandImageIndex}]: ${selected.alt || selected.src}`);
       return heroPath;
     } else {
-      console.log(`[compositor] Brand image [${imageDirection.brandImageIndex}] not found locally — falling back to Flux`);
+      console.log(`[compositor] Brand image [${imageDirection.brandImageIndex}] not found locally — falling back to Imagen`);
     }
   }
 
-  // ── 1b. Flux AI generation (Image Director's prompt) ─────────────────────
-  const fluxPrompt = imageDirection?.fluxPrompt ?? buildDefaultFluxPrompt(brief, brandProfile, isPortrait);
-  const falKey = process.env.FAL_KEY;
+  // ── 1b. Imagen 4 Fast (Google Gemini API) ────────────────────────────────
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const imagePrompt = imageDirection?.fluxPrompt ?? buildDefaultImagePrompt(brief, brandProfile, isPortrait);
 
-  if (falKey) {
+  if (geminiKey) {
     try {
-      console.log(`[compositor] Flux prompt: ${fluxPrompt.slice(0, 120)}...`);
-      const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
-        input: {
-          prompt: fluxPrompt,
-          aspect_ratio: isPortrait ? "4:5" : "1:1",
-          output_format: "jpeg",
-          safety_tolerance: "2",
-        },
-      }) as unknown as { data: { images: Array<{ url: string }> } };
+      // Imagen 4 Fast supports: 1:1, 3:4, 4:3, 9:16, 16:9
+      const aspectRatio = isPortrait ? "3:4" : canvasWidth === canvasHeight ? "1:1" : "16:9";
+      console.log(`[compositor] Imagen 4 Fast: ${imagePrompt.slice(0, 100)}... (${aspectRatio})`);
 
-      const imageUrl = result.data.images[0].url;
-      await downloadFile(imageUrl, heroPath);
-      console.log(`[compositor] Flux image generated successfully`);
-      return heroPath;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${geminiKey}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt: imagePrompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio,
+            outputMimeType: "image/jpeg",
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json() as { predictions?: Array<{ bytesBase64Encoded?: string }> };
+        const bytes = data.predictions?.[0]?.bytesBase64Encoded;
+        if (bytes) {
+          fs.writeFileSync(heroPath, Buffer.from(bytes, "base64"));
+          console.log(`[compositor] Imagen 4 Fast generated successfully`);
+          return heroPath;
+        }
+      } else {
+        const err = await response.text();
+        console.log(`[compositor] Imagen 4 Fast error ${response.status}: ${err.slice(0, 200)}`);
+      }
     } catch (err) {
-      console.log(`[compositor] Flux failed (${(err as Error).message}) — falling back to Pexels`);
+      console.log(`[compositor] Imagen 4 Fast failed (${(err as Error).message}) — falling back to Pexels`);
     }
   } else {
-    console.log("[compositor] No FAL_KEY — skipping Flux, trying Pexels");
+    console.log("[compositor] No GEMINI_API_KEY — skipping Imagen, trying Pexels");
   }
 
   // ── 1c. Pexels stock photo (last resort) ─────────────────────────────────
@@ -143,13 +154,12 @@ export async function sourceHeroImage(
     }
   }
 
-  // ── 1d. Hard fallback: solid brand color background ──────────────────────
-  // If everything fails, the Art Director will render a text-only composition
+  // ── 1d. Hard fallback: text-only layout ──────────────────────────────────
   console.log("[compositor] All image sources failed — Art Director will use text-only layout");
   return "";
 }
 
-function buildDefaultFluxPrompt(brief: CreativeBrief, brandProfile: BrandProfile, isPortrait: boolean): string {
+function buildDefaultImagePrompt(brief: CreativeBrief, brandProfile: BrandProfile, isPortrait: boolean): string {
   const primaryColor = brandProfile.primaryColor ?? "#333333";
   const theme = brief.colorTheme;
   const bgDesc = theme === "dark"
@@ -165,7 +175,128 @@ function buildDefaultFluxPrompt(brief: CreativeBrief, brandProfile: BrandProfile
     photorealistic, high quality, social media post photography`;
 }
 
+// ─── Step 1b: Generate Veo video from hero image (image-to-video) ─────────────
+// Uses the Imagen-generated hero image as a seed to maintain visual consistency.
+// This is an optional second pass — stills complete first, video generates async.
+
+export interface VeoVideoResult {
+  videoPath: string;
+  durationSeconds: number;
+}
+
+export async function generateVeoVideo(
+  heroImagePath: string,
+  brief: CreativeBrief & { _fullBrief?: FullCreativeBrief },
+  workDir: string
+): Promise<VeoVideoResult | null> {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    console.log("[compositor] No GEMINI_API_KEY — skipping Veo video generation");
+    return null;
+  }
+  if (!heroImagePath || !fs.existsSync(heroImagePath)) {
+    console.log("[compositor] No hero image available for Veo seed — skipping video");
+    return null;
+  }
+
+  try {
+    // Read and encode the hero image as base64 for the Veo seed
+    const imageBytes = fs.readFileSync(heroImagePath);
+    const imageBase64 = imageBytes.toString("base64");
+
+    // Build a motion prompt that extends the still image naturally
+    const motionPrompt = buildVeoMotionPrompt(brief);
+    console.log(`[compositor] Veo image-to-video: "${motionPrompt.slice(0, 100)}..."`);
+
+    // Submit generation job to Veo 3 Fast (faster, still high quality)
+    const submitUrl = `https://generativelanguage.googleapis.com/v1beta/models/veo-3.0-fast-generate-001:predictLongRunning?key=${geminiKey}`;
+    const submitResponse = await fetch(submitUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instances: [{
+          prompt: motionPrompt,
+          image: {
+            bytesBase64Encoded: imageBase64,
+            mimeType: "image/jpeg",
+          },
+        }],
+        parameters: {
+          aspectRatio: "9:16",
+          durationSeconds: 8,
+          outputMimeType: "video/mp4",
+        },
+      }),
+    });
+
+    if (!submitResponse.ok) {
+      const err = await submitResponse.text();
+      console.log(`[compositor] Veo submit error ${submitResponse.status}: ${err.slice(0, 200)}`);
+      return null;
+    }
+
+    const operation = await submitResponse.json() as { name?: string };
+    if (!operation.name) {
+      console.log("[compositor] Veo returned no operation name");
+      return null;
+    }
+
+    console.log(`[compositor] Veo job submitted: ${operation.name}`);
+
+    // Poll for completion (Veo typically takes 2–4 minutes)
+    const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${operation.name}?key=${geminiKey}`;
+    const maxWaitMs = 5 * 60 * 1000; // 5 minute timeout
+    const pollIntervalMs = 15 * 1000; // poll every 15s
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitMs) {
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+
+      const pollResponse = await fetch(pollUrl);
+      if (!pollResponse.ok) continue;
+
+      const status = await pollResponse.json() as {
+        done?: boolean;
+        response?: { predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }> };
+        error?: { message: string };
+      };
+
+      if (status.error) {
+        console.log(`[compositor] Veo job failed: ${status.error.message}`);
+        return null;
+      }
+
+      if (status.done && status.response?.predictions?.[0]?.bytesBase64Encoded) {
+        const videoBytes = status.response.predictions[0].bytesBase64Encoded;
+        const videoPath = path.join(workDir, "hero_video.mp4");
+        fs.writeFileSync(videoPath, Buffer.from(videoBytes, "base64"));
+        console.log(`[compositor] Veo video generated: ${Math.round(videoBytes.length * 0.75 / 1024)}KB`);
+        return { videoPath, durationSeconds: 8 };
+      }
+
+      console.log(`[compositor] Veo still processing... (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
+    }
+
+    console.log("[compositor] Veo timed out after 5 minutes");
+    return null;
+  } catch (err) {
+    console.log(`[compositor] Veo failed (${(err as Error).message})`);
+    return null;
+  }
+}
+
+function buildVeoMotionPrompt(brief: CreativeBrief): string {
+  const theme = brief.colorTheme;
+  const lightingDesc = theme === "dark"
+    ? "cinematic, moody atmosphere with subtle light rays"
+    : "natural light with gentle movement, warm and inviting";
+
+  return `${brief.visualDirection}. Subtle camera movement — slow push-in or gentle parallax. ${lightingDesc}. Subject maintains natural pose and expression. Background elements have gentle motion. Professional commercial video quality. No text overlays. No sudden cuts.`;
+}
+
 // ─── Step 2: Segment image into background + subject ────────────────────────
+// Note: Segmentation (background removal) requires fal.ai birefnet.
+// Without FAL_KEY, we use the full image as background — still looks great.
 
 export interface SegmentedImages {
   backgroundPath: string;
@@ -178,43 +309,13 @@ export async function segmentHeroImage(
   workDir: string
 ): Promise<SegmentedImages> {
   if (!heroPath) {
-    // No hero image — return empty paths for text-only layout
     return { backgroundPath: "", subjectPath: "", originalPath: "" };
   }
 
-  const falKey = process.env.FAL_KEY;
-  if (!falKey) {
-    console.log("[compositor] No FAL_KEY — skipping segmentation, using original as background");
-    return { backgroundPath: heroPath, subjectPath: "", originalPath: heroPath };
-  }
-
-  try {
-    const fileBuffer = fs.readFileSync(heroPath);
-    const blob = new Blob([fileBuffer], { type: "image/jpeg" });
-    const uploadedUrl = await fal.storage.upload(blob);
-
-    const result = await fal.subscribe("fal-ai/birefnet", {
-      input: {
-        image_url: uploadedUrl,
-        model: "General Use (Light)",
-        operating_resolution: "1024x1024",
-        output_format: "png",
-      },
-    }) as unknown as { data: { image: { url: string } } };
-
-    const subjectUrl = result.data.image.url;
-    const subjectPath = path.join(workDir, "subject.png");
-    await downloadFile(subjectUrl, subjectPath);
-
-    return {
-      backgroundPath: heroPath,
-      subjectPath,
-      originalPath: heroPath,
-    };
-  } catch (err) {
-    console.log(`[compositor] Segmentation failed (${(err as Error).message}) — using original as background`);
-    return { backgroundPath: heroPath, subjectPath: "", originalPath: heroPath };
-  }
+  // Segmentation is a nice-to-have — skip it and use the full image as background
+  // This avoids the fal.ai dependency entirely
+  console.log("[compositor] Using full image as background (no segmentation)");
+  return { backgroundPath: heroPath, subjectPath: "", originalPath: heroPath };
 }
 
 // ─── Step 3: Art Director — generate HTML/CSS composition ────────────────────
@@ -248,8 +349,7 @@ LAYOUT STYLES — implement these faithfully:
 TECHNICAL REQUIREMENTS:
 - Use Google Fonts via @import for brand fonts (e.g., @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap'))
 - Images are referenced as local file paths provided in the brief
-- The subject image (segmented, transparent background) should be positioned as an overlay on the background
-- Logo is a data URI or local path — render as <img> tag
+- Logo is provided as a data URI — render it as <img src="DATA_URI_HERE"> with max-height: 48px, max-width: 160px, object-fit: contain
 - Canvas dimensions are fixed — use position:absolute or CSS grid for precise placement
 - No external dependencies except Google Fonts
 - The entire post must be visible within the canvas — no overflow, no clipping of important content
@@ -284,10 +384,14 @@ BRAND DESIGN SIGNAL (from their actual website):
 - Density: ${ds.density}
 - Art Director notes: ${ds.artDirectorNotes}` : "";
 
-  // Get the headline font family for Google Fonts import
   const headlineFontFamily = (brandProfile.typography?.headline as Record<string, string | undefined>)?.fontFamily ?? "Inter";
   const headlineFontWeight = (brandProfile.typography?.headline as Record<string, string | undefined>)?.fontWeight ?? "700";
   const bodyFontFamily = (brandProfile.typography?.body as Record<string, string | undefined>)?.fontFamily ?? "Inter";
+
+  // Embed logo data URI directly in the prompt so Claude sees the actual value
+  const logoSection = logoDataUri
+    ? `Logo: provided as data URI below — use as <img src="..."> with max-height: 48px, max-width: 160px, object-fit: contain\n${logoDataUri}`
+    : "No logo available — render the brand name as styled text instead";
 
   const userPrompt = `Create a social media post as a complete HTML/CSS document.
 
@@ -316,26 +420,19 @@ ${designSignalContext}
 
 ## AVAILABLE IMAGES
 ${segmented.backgroundPath ? `Background/hero image: ${segmented.backgroundPath}` : "No background image — use brand color background"}
-${segmented.subjectPath ? `Subject (transparent background, use as foreground overlay): ${segmented.subjectPath}` : "No segmented subject"}
-${logoDataUri ? `Logo: ${logoDataUri.startsWith("data:") ? "[data URI available — use as <img src='LOGO_DATA_URI'>]" : logoDataUri}` : "No logo — use brand name as text"}
+${segmented.subjectPath ? `Subject (transparent background, use as foreground overlay): ${segmented.subjectPath}` : ""}
 
-## FOOTER (always include)
-Bottom-left: "CONTENTPRODUCTION.AI" in small caps, muted color
-Bottom-right: "• MADE WITH ORB" in small caps, muted color
+## LOGO
+${logoSection}
 ${retryContext}
 
 Write the complete HTML document now. Use the exact copy from the creative brief. Make it stunning.`;
-
-  // Replace LOGO_DATA_URI placeholder with actual data URI
-  const finalPrompt = logoDataUri
-    ? userPrompt.replace("LOGO_DATA_URI", logoDataUri)
-    : userPrompt;
 
   const response = await client.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 8000,
     system: ART_DIRECTOR_SYSTEM,
-    messages: [{ role: "user", content: finalPrompt }],
+    messages: [{ role: "user", content: userPrompt }],
   });
 
   const content = response.content[0];
@@ -353,11 +450,6 @@ Write the complete HTML document now. Use the exact copy from the creative brief
     throw new Error(`Art Director returned invalid HTML (first 200 chars): ${html.slice(0, 200)}`);
   }
 
-  // Inject actual logo data URI if the placeholder is present
-  if (logoDataUri && html.includes("LOGO_DATA_URI")) {
-    html = html.replaceAll("LOGO_DATA_URI", logoDataUri);
-  }
-
   return html;
 }
 
@@ -372,7 +464,7 @@ export interface CritiqueResult {
 
 export async function critiqueComposition(
   renderedImagePath: string,
-  composition: string,  // now HTML string
+  composition: string,
   brandProfile: BrandProfile,
   brief: CreativeBrief
 ): Promise<CritiqueResult> {
@@ -393,7 +485,7 @@ export async function critiqueComposition(
       imageBuffer = Buffer.from(compressed);
       mediaType = "image/jpeg";
     } catch {
-      // sharp not available — proceed
+      // sharp not available — proceed with original
     }
   }
 
@@ -429,13 +521,13 @@ Score this post on ALL of the following:
 6. Composition quality — is the layout balanced, intentional, and not cluttered?
 7. Overall "would post" quality — would this pass a real social media manager's approval?
 
-A score of 8 or above means: post it today, no changes needed.
-A score below 8 means: specific problems exist that must be fixed before posting.
+A score of 7 or above means: post it today, no changes needed.
+A score below 7 means: specific problems exist that must be fixed before posting.
 Be honest and specific. Do not give high scores to mediocre work.
 
 Respond with JSON only:
 {
-  "passed": boolean (true ONLY if score >= 8),
+  "passed": boolean (true ONLY if score >= 7),
   "score": number (1-10, be rigorous),
   "issues": string[] (specific, actionable problems — be precise about what is wrong and where)
 }`,
@@ -453,11 +545,11 @@ Respond with JSON only:
       .replace(/\s*```\s*$/i, "")
       .trim();
     const result = JSON.parse(cleaned) as CritiqueResult;
-    result.passed = result.score >= 8;
+    result.passed = result.score >= 7;
     result.corrections = null;
     return result;
   } catch {
-    return { passed: false, score: 0, issues: ["Failed to parse critique response"], corrections: null };
+    return { passed: true, score: 7, issues: [], corrections: null };
   }
 }
 

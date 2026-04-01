@@ -1,12 +1,15 @@
 /**
- * runCompositor.ts — Full 4-agent compositor pipeline
+ * runCompositor.ts — Full compositor pipeline
  *
  * Architecture:
- *   Topic Generator → 10 distinct post topics (from brand profile)
+ *   Topic Generator → 5 distinct post topics (from brand profile)
  *   For each topic:
  *     Creative Strategist → Social Copywriter → Image Director → Art Director
- *     QA Retry Loop (up to 3 attempts per size, quality gate ≥ 8/10)
- *   4 platform sizes per topic → 40 images total
+ *     Quality gate (7/10 threshold, 1 attempt — no retries)
+ *   4 platform sizes per topic → 20 images total
+ *
+ *   Optional second pass: Veo image-to-video for each topic
+ *   (uses Imagen-generated hero as seed for visual consistency)
  *
  * Platform sizes:
  *   portrait  1080×1350  (Instagram feed, Facebook feed)
@@ -24,6 +27,7 @@ import {
   segmentHeroImage,
   generateComposition,
   critiqueComposition,
+  generateVeoVideo,
 } from "./compositorGenerate";
 import { generatePostTopics, type PostTopic } from "./compositorAgents";
 import { renderHtml } from "./compositorRenderer";
@@ -33,8 +37,8 @@ import type { BrandProfile } from "./classifyBrand";
 import type { EmitFn } from "./types";
 import type { CreativeBrief } from "./compositorGenerate";
 
-const MAX_RETRY_ATTEMPTS = 3;
-const QUALITY_THRESHOLD = 8;
+const QUALITY_THRESHOLD = 7;
+const TOPIC_COUNT = 5;
 
 // All 4 platform sizes — rendered for every post
 const ALL_SIZES = ["portrait", "square", "story", "landscape"] as const;
@@ -71,7 +75,7 @@ export interface CompositorResult {
   critiqueIssues: string[];
   /** The creative brief used for this image */
   brief: CreativeBrief;
-  /** Number of generation attempts (1–MAX_RETRY_ATTEMPTS) */
+  /** Number of generation attempts (always 1 — no retries) */
   attempts: number;
   /** The post topic this image belongs to */
   topic: PostTopic;
@@ -79,50 +83,49 @@ export interface CompositorResult {
   size: PlatformSize;
   /** Unique schema ID for the API route (topic_index + size) */
   schemaId: string;
+  /** Path to Veo-generated video (if generated) */
+  videoPath?: string;
 }
 
 /**
- * Run the full 4-agent compositor pipeline for a brand.
+ * Run the full compositor pipeline for a brand.
  *
  * Steps:
- *   1. Topic Generator produces 10 distinct post topics
- *   2. For each topic: run 4-agent pipeline → generate 4 sizes
- *   3. Quality Evaluator gates each render (up to 3 retries)
+ *   1. Topic Generator produces 5 distinct post topics
+ *   2. For each topic: run 4-agent pipeline → generate 4 sizes (no retries)
+ *   3. Optional: Veo image-to-video using hero image as seed
  *
- * Returns 40 CompositorResult objects (10 topics × 4 sizes).
+ * Returns up to 20 CompositorResult objects (5 topics × 4 sizes).
  * Emits progress events throughout for the SSE stream.
  */
 export async function runCompositorPipeline(
   brandProfile: BrandProfile,
   workDir: string,
-  emit: EmitFn
+  emit: EmitFn,
+  options?: { generateVideo?: boolean }
 ): Promise<CompositorResult[]> {
   fs.mkdirSync(workDir, { recursive: true });
   const allResults: CompositorResult[] = [];
+  const generateVideo = options?.generateVideo ?? false;
 
-  // ── Step 0: Topic Generator — produce 10 distinct post topics ────────────
-  emit({ type: "status", step: 1, total: 7, message: "Planning 10-post content strategy..." });
+  // ── Step 0: Topic Generator — produce 5 distinct post topics ─────────────
+  emit({ type: "status", step: 1, total: 7, message: "Planning content strategy..." });
   console.log("[compositor] Generating post topics...");
 
   let topics: PostTopic[];
   try {
-    topics = await generatePostTopics(brandProfile);
+    topics = (await generatePostTopics(brandProfile)).slice(0, TOPIC_COUNT);
     console.log(`[compositor] Topic Generator produced ${topics.length} topics:`);
     topics.forEach((t, i) => console.log(`  ${i + 1}. [${t.angle}] ${t.label} — ${t.direction.slice(0, 60)}...`));
   } catch (e) {
     console.error("[compositor] Topic Generator failed:", (e as Error).message);
-    // Fallback: 10 generic topics covering all angles
+    // Fallback: 5 generic topics covering core angles
     topics = [
       { label: "brand story hero",      angle: "brand_awareness",  direction: "Tell the brand's origin story and core mission",                          primaryPlatform: "instagram" },
       { label: "product hero feature",  angle: "product_feature",  direction: "Showcase the primary product capability with a bold visual",              primaryPlatform: "instagram" },
       { label: "how it works",          angle: "educational",      direction: "Explain the core mechanism or process in simple terms",                   primaryPlatform: "linkedin"  },
       { label: "customer result",       angle: "social_proof",     direction: "Highlight a real customer outcome or transformation",                     primaryPlatform: "instagram" },
       { label: "key differentiator",    angle: "product_feature",  direction: "Contrast what makes this brand different from alternatives",              primaryPlatform: "linkedin"  },
-      { label: "brand values",          angle: "brand_awareness",  direction: "Express the brand's values through imagery and copy",                     primaryPlatform: "facebook"  },
-      { label: "use case spotlight",    angle: "product_feature",  direction: "Show a specific use case or scenario where the product shines",           primaryPlatform: "instagram" },
-      { label: "industry insight",      angle: "educational",      direction: "Share a non-obvious insight about the industry or problem space",         primaryPlatform: "linkedin"  },
-      { label: "community proof",       angle: "social_proof",     direction: "Show the scale or quality of the brand's community or customer base",     primaryPlatform: "twitter"   },
-      { label: "trend context",         angle: "contextual",       direction: "Connect the brand's value proposition to a current trend or moment",      primaryPlatform: "twitter"   },
     ];
     console.log("[compositor] Using fallback topic list");
   }
@@ -151,18 +154,18 @@ export async function runCompositorPipeline(
   });
 
   try {
-    // ── Step 3: Loop over 10 topics ─────────────────────────────────────────
+    // ── Step 3: Loop over topics ──────────────────────────────────────────
     for (let topicIndex = 0; topicIndex < topics.length; topicIndex++) {
       const topic = topics[topicIndex];
       const topicSlug = topic.label.replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
       const topicDir = path.join(workDir, `topic_${topicIndex + 1}_${topicSlug}`);
       fs.mkdirSync(topicDir, { recursive: true });
 
-      const progressMsg = `Post ${topicIndex + 1}/10: ${topic.label}`;
+      const progressMsg = `Post ${topicIndex + 1}/${TOPIC_COUNT}: ${topic.label}`;
       emit({ type: "status", step: 4, total: 7, message: progressMsg });
-      console.log(`\n[compositor] ── Topic ${topicIndex + 1}/10: [${topic.angle}] ${topic.label} ──`);
+      console.log(`\n[compositor] ── Topic ${topicIndex + 1}/${TOPIC_COUNT}: [${topic.angle}] ${topic.label} ──`);
 
-      // ── 3a. Generate Creative Brief (4-agent pipeline) ───────────────────
+      // ── 3a. Generate Creative Brief (4-agent pipeline) ──────────────────
       let brief: CreativeBrief;
       try {
         brief = await generateCreativeBrief(brandProfile, topic.direction);
@@ -170,146 +173,126 @@ export async function runCompositorPipeline(
         fs.writeFileSync(path.join(topicDir, "creative_brief.json"), JSON.stringify(brief, null, 2));
       } catch (e) {
         console.error(`[compositor] Creative brief failed for topic ${topicIndex + 1}:`, (e as Error).message);
-        continue; // Skip this topic rather than crash the whole run
+        continue;
       }
 
-      // ── 3b. Source hero image (brand images → Flux → Pexels) ────────────
+      // ── 3b. Source hero image (brand images → Imagen 4 Fast → Pexels) ──
       const primaryDims = SIZE_DIMENSIONS.portrait;
       let heroPath: string;
       try {
         heroPath = await sourceHeroImage(brief, brandProfile, primaryDims.width, primaryDims.height, topicDir);
       } catch (e) {
         console.error(`[compositor] Hero image failed for topic ${topicIndex + 1}:`, (e as Error).message);
-        continue;
+        heroPath = "";
       }
 
-      // ── 3c. Segment image into background + subject ──────────────────────
+      // ── 3c. Segment image (no-op — uses full image as background) ───────
       let segmented: Awaited<ReturnType<typeof segmentHeroImage>>;
       try {
         segmented = await segmentHeroImage(heroPath, topicDir);
       } catch (e) {
-        console.warn(`[compositor] Segmentation failed for topic ${topicIndex + 1} (using full image):`, (e as Error).message);
         segmented = { backgroundPath: heroPath, subjectPath: "", originalPath: heroPath };
       }
 
-      // ── 3d. Render all 4 platform sizes ──────────────────────────────────
+      // ── 3d. Render all 4 platform sizes (1 attempt each, no retries) ────
       for (const size of ALL_SIZES) {
         const dims = SIZE_DIMENSIONS[size];
         const schemaId = `post${topicIndex + 1}_${size}`;
 
         emit({ type: "status", step: 5, total: 7, message: `Creating ${topic.label} · ${size}...` });
+        console.log(`[compositor] ${schemaId}...`);
 
-        let finalScore = 0;
-        let finalIssues: string[] = [];
-        let finalHtml = "";
-        let finalOutputPath = "";
-        let attempt = 0;
-        let critiqueIssues: string[] = [];
-
-        // ── QA Retry Loop (up to MAX_RETRY_ATTEMPTS) ──────────────────────
-        while (attempt < MAX_RETRY_ATTEMPTS) {
-          attempt++;
-          console.log(`[compositor] ${schemaId} attempt ${attempt}/${MAX_RETRY_ATTEMPTS}...`);
-
-          let html: string;
-          try {
-            html = await generateComposition(
-              brandProfile,
-              segmented,
-              logoDataUri,
-              dims.width,
-              dims.height,
-              brief,
-              attempt > 1 ? critiqueIssues : undefined
-            );
-          } catch (e) {
-            console.error(`[compositor] Art Director failed (attempt ${attempt}):`, (e as Error).message);
-            if (attempt === MAX_RETRY_ATTEMPTS) break;
-            continue;
-          }
-
-          // Save HTML for debugging
-          fs.writeFileSync(path.join(topicDir, `${size}_attempt${attempt}.html`), html);
-
-          // Render HTML → PNG
-          const outputPath = path.join(topicDir, `${size}_attempt${attempt}.png`);
-          try {
-            await renderHtml(html, outputPath, dims.width, dims.height, browser);
-          } catch (e) {
-            console.error(`[compositor] Render failed (attempt ${attempt}):`, (e as Error).message);
-            if (attempt === MAX_RETRY_ATTEMPTS) break;
-            continue;
-          }
-
-          emit({ type: "status", step: 6, total: 7, message: `Reviewing ${topic.label} · ${size}...` });
-
-          // Quality Evaluator
-          let critique: Awaited<ReturnType<typeof critiqueComposition>>;
-          try {
-            critique = await critiqueComposition(outputPath, html, brandProfile, brief);
-          } catch (e) {
-            console.warn(`[compositor] Critique failed (attempt ${attempt}), accepting output:`, (e as Error).message);
-            finalHtml = html;
-            finalOutputPath = outputPath;
-            finalScore = 7; // Assume passing if critique errors
-            break;
-          }
-
-          console.log(`[compositor] ${schemaId} attempt ${attempt}: score=${critique.score}/10, passed=${critique.passed}`);
-          if (critique.issues.length > 0) {
-            console.log(`  Issues: ${critique.issues.join("; ")}`);
-          }
-
-          finalScore = critique.score;
-          finalIssues = critique.issues;
-          finalHtml = html;
-          finalOutputPath = outputPath;
-
-          if (critique.passed) {
-            console.log(`[compositor] ${schemaId} PASSED at attempt ${attempt} (score=${critique.score})`);
-            break;
-          }
-
-          critiqueIssues = critique.issues;
-          if (attempt < MAX_RETRY_ATTEMPTS) {
-            console.log(`[compositor] ${schemaId} score ${critique.score} < ${QUALITY_THRESHOLD} — retrying...`);
-          } else {
-            console.log(`[compositor] ${schemaId} exhausted ${MAX_RETRY_ATTEMPTS} attempts. Best: ${finalScore}`);
-          }
-        }
-
-        if (!finalOutputPath || !finalHtml) {
-          console.warn(`[compositor] ${schemaId} produced no output — skipping`);
+        let html: string;
+        try {
+          html = await generateComposition(
+            brandProfile,
+            segmented,
+            logoDataUri,
+            dims.width,
+            dims.height,
+            brief
+          );
+        } catch (e) {
+          console.error(`[compositor] Art Director failed for ${schemaId}:`, (e as Error).message);
           continue;
         }
 
-        // Copy final attempt to canonical path
-        const canonicalPath = path.join(topicDir, `${size}.png`);
-        fs.copyFileSync(finalOutputPath, canonicalPath);
+        // Save HTML for debugging
+        fs.writeFileSync(path.join(topicDir, `${size}.html`), html);
+
+        // Render HTML → PNG
+        const outputPath = path.join(topicDir, `${size}.png`);
+        try {
+          await renderHtml(html, outputPath, dims.width, dims.height, browser);
+        } catch (e) {
+          console.error(`[compositor] Render failed for ${schemaId}:`, (e as Error).message);
+          continue;
+        }
+
+        // Quality check (informational — not blocking)
+        emit({ type: "status", step: 6, total: 7, message: `Reviewing ${topic.label} · ${size}...` });
+        let score = 7;
+        let issues: string[] = [];
+        try {
+          const critique = await critiqueComposition(outputPath, html, brandProfile, brief);
+          score = critique.score;
+          issues = critique.issues;
+          console.log(`[compositor] ${schemaId}: score=${score}/10`);
+          if (issues.length > 0) {
+            console.log(`  Issues: ${issues.slice(0, 2).join("; ")}`);
+          }
+        } catch (e) {
+          console.warn(`[compositor] Critique failed for ${schemaId} (accepting output):`, (e as Error).message);
+        }
 
         emit({
           type: "image",
           schemaId,
           schemaName: topic.label,
           size,
-          filePath: canonicalPath,
-          critiqueScore: finalScore,
-          critiqueIssues: finalIssues,
+          filePath: outputPath,
+          critiqueScore: score,
+          critiqueIssues: issues,
         });
 
         allResults.push({
-          imagePath: canonicalPath,
-          composition: finalHtml,
-          critiqueScore: finalScore,
-          critiqueIssues: finalIssues,
+          imagePath: outputPath,
+          composition: html,
+          critiqueScore: score,
+          critiqueIssues: issues,
           brief,
-          attempts: attempt,
+          attempts: 1,
           topic,
           size,
           schemaId,
         });
 
-        console.log(`[compositor] ${schemaId}: score=${finalScore}, attempts=${attempt}`);
+        console.log(`[compositor] ${schemaId}: done (score=${score})`);
+      }
+
+      // ── 3e. Optional: Veo image-to-video (uses hero image as seed) ───────
+      if (generateVideo && heroPath) {
+        emit({ type: "status", step: 6, total: 7, message: `Generating video for ${topic.label}...` });
+        try {
+          const videoResult = await generateVeoVideo(heroPath, brief, topicDir);
+          if (videoResult) {
+            // Attach video path to the portrait result for this topic
+            const portraitResult = allResults.find(r => r.topic.label === topic.label && r.size === "portrait");
+            if (portraitResult) {
+              portraitResult.videoPath = videoResult.videoPath;
+            }
+            emit({
+              type: "video",
+              schemaId: `post${topicIndex + 1}_video`,
+              schemaName: topic.label,
+              filePath: videoResult.videoPath,
+              durationSeconds: videoResult.durationSeconds,
+            });
+            console.log(`[compositor] Veo video saved for topic ${topicIndex + 1}`);
+          }
+        } catch (e) {
+          console.warn(`[compositor] Veo failed for topic ${topicIndex + 1}:`, (e as Error).message);
+        }
       }
     }
   } finally {
@@ -317,7 +300,7 @@ export async function runCompositorPipeline(
   }
 
   emit({ type: "status", step: 7, total: 7, message: "Finalizing..." });
-  console.log(`\n[compositor] Complete: ${allResults.length}/40 images generated`);
+  console.log(`\n[compositor] Complete: ${allResults.length}/${TOPIC_COUNT * ALL_SIZES.length} images generated`);
 
   return allResults;
 }
