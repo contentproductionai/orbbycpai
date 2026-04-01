@@ -194,17 +194,15 @@ export async function runCompositorPipeline(
         segmented = { backgroundPath: heroPath, subjectPath: "", originalPath: heroPath };
       }
 
-      // ── 3d. Render all 4 platform sizes (1 attempt each, no retries) ────
+      // ── 3d. Render all 4 platform sizes (sequential — API rate limits prevent parallelism) ──
+      const htmlResults: Array<{ size: PlatformSize; schemaId: string; html: string; dims: { width: number; height: number }; error: string | null }> = [];
       for (const size of ALL_SIZES) {
         const dims = SIZE_DIMENSIONS[size];
         const schemaId = `post${topicIndex + 1}_${size}`;
-
         emit({ type: "status", step: 5, total: 7, message: `Creating ${topic.label} · ${size}...` });
         console.log(`[compositor] ${schemaId}...`);
-
-        let html: string;
         try {
-          html = await generateComposition(
+          const html = await generateComposition(
             brandProfile,
             segmented,
             logoDataUri,
@@ -212,15 +210,18 @@ export async function runCompositorPipeline(
             dims.height,
             brief
           );
+          fs.writeFileSync(path.join(topicDir, `${size}.html`), html);
+          htmlResults.push({ size, schemaId, html, dims, error: null });
         } catch (e) {
           console.error(`[compositor] Art Director failed for ${schemaId}:`, (e as Error).message);
-          continue;
+          htmlResults.push({ size, schemaId, html: "", dims, error: (e as Error).message });
         }
+      }
 
-        // Save HTML for debugging
-        fs.writeFileSync(path.join(topicDir, `${size}.html`), html);
+      // Render HTML → PNG
+      for (const { size, schemaId, html, dims, error } of htmlResults) {
+        if (error || !html) continue;
 
-        // Render HTML → PNG
         const outputPath = path.join(topicDir, `${size}.png`);
         try {
           await renderHtml(html, outputPath, dims.width, dims.height, browser);
@@ -229,21 +230,9 @@ export async function runCompositorPipeline(
           continue;
         }
 
-        // Quality check (informational — not blocking)
-        emit({ type: "status", step: 6, total: 7, message: `Reviewing ${topic.label} · ${size}...` });
-        let score = 7;
-        let issues: string[] = [];
-        try {
-          const critique = await critiqueComposition(outputPath, html, brandProfile, brief);
-          score = critique.score;
-          issues = critique.issues;
-          console.log(`[compositor] ${schemaId}: score=${score}/10`);
-          if (issues.length > 0) {
-            console.log(`  Issues: ${issues.slice(0, 2).join("; ")}`);
-          }
-        } catch (e) {
-          console.warn(`[compositor] Critique failed for ${schemaId} (accepting output):`, (e as Error).message);
-        }
+        // Emit image result (critique removed — saves ~$0.43/run)
+        const score = 7;
+        const issues: string[] = [];
 
         emit({
           type: "image",
@@ -267,7 +256,7 @@ export async function runCompositorPipeline(
           schemaId,
         });
 
-        console.log(`[compositor] ${schemaId}: done (score=${score})`);
+        console.log(`[compositor] ${schemaId}: done`);
       }
 
       // ── 3e. Optional: Veo image-to-video (uses hero image as seed) ───────

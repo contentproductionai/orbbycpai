@@ -326,30 +326,25 @@ Your output is a COMPLETE HTML document — not JSON, not a description, not a t
 
 CANVAS: The document body is always exactly the canvas size specified. No scrollbars. No overflow. Pixel-perfect.
 
-YOUR CREATIVE BRIEF TELLS YOU:
-- The headline, subheadline, and CTA (use these EXACTLY — do not rewrite copy)
-- The layout style (full-bleed portrait, editorial split, bold typographic, product showcase, quote card)
-- The color theme (light or dark)
-- The brand's visual identity (colors, fonts, shape language)
-
-WHAT MAKES GREAT SOCIAL CONTENT:
-1. HIERARCHY — the eye knows exactly where to go first. One dominant element. Everything else supports it.
-2. CONTRAST — text is always legible. Use overlays, shadows, or solid backgrounds when text sits on imagery.
-3. BRAND FIDELITY — use the brand's actual colors and fonts. Do not substitute.
-4. BREATHING ROOM — generous whitespace. Never crowded. Never cluttered.
-5. INTENTIONAL COMPOSITION — every element has a reason to be where it is.
+CORE DESIGN RULES (non-negotiable):
+1. MINIMAL COPY — social media is scanned, not read. Use ONLY: logo + headline + one short subheadline (max 15 words) + one CTA button. Nothing else. No bullet points, no extra paragraphs, no hashtags, no captions.
+2. GENEROUS MARGINS — minimum 48px padding on all sides. Text must never touch edges. Content zone should use at most 80% of canvas width.
+3. HIERARCHY — one dominant element. Headline is the hero of the text. Everything else is secondary.
+4. LEGIBILITY — text always readable. On images: use a gradient scrim or solid background panel. Never white text on light background.
+5. BRAND FIDELITY — use the brand's exact colors from the brief. CTA button uses the brand primary color. Button text is white (#ffffff) or the lightest color in the palette.
+6. BREATHING ROOM — generous whitespace. If in doubt, remove an element rather than crowd the layout.
 
 LAYOUT STYLES — implement these faithfully:
-- "full-bleed portrait": hero image fills entire canvas. Text overlaid with gradient scrim (bottom 50% to transparent). Logo top-left. Headline large, bottom-left. Subheadline below headline. CTA bottom-right or bottom-left.
-- "editorial split": canvas divided vertically. Image on one side (60%), brand color fill on other side (40%). Text on the solid color side. Clean, magazine-style.
-- "bold typographic": no hero photo (or very subtle background). Giant headline dominates. Brand color accents. Strong type hierarchy. Minimal elements.
-- "product showcase": product/subject image prominent in center or right. Copy on left or bottom. Brand color background.
-- "quote card": testimonial or stat as the hero. Large display number or pull quote. Supporting context below. Brand color treatment.
+- "full-bleed portrait": hero image fills entire canvas. Gradient scrim covers bottom 45% (transparent to brand background color). Logo top-left (48px from edges). Headline large (52-64px), bottom-left. Subheadline (18-20px) below headline. CTA button bottom-left or bottom-right. All text in content zone with 48px left/right padding.
+- "editorial split": canvas split vertically — image left 58%, solid brand color right 42%. Logo top of text panel (48px padding). Headline (44-56px bold) centered vertically in text panel. Subheadline (16-18px) below headline. CTA button near bottom of text panel. All text has 48px horizontal padding within the panel.
+- "bold typographic": no hero photo. Brand color background (or white). Giant headline (72-96px) dominates center. Subheadline (20px) below. CTA button centered at bottom. Logo top-center or top-left.
+- "product showcase": product image prominent (center or right 50%). Copy panel on left or bottom with brand color background. Same text hierarchy as editorial split.
+- "quote card": large pull quote (48-64px) as the hero text, centered. Attribution or context below (16px). Brand color background or subtle image. Logo top.
 
 TECHNICAL REQUIREMENTS:
 - Use Google Fonts via @import for brand fonts (e.g., @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap'))
 - Images are referenced as local file paths provided in the brief
-- Logo is provided as a data URI — render it as <img src="DATA_URI_HERE"> with max-height: 48px, max-width: 160px, object-fit: contain
+- If a logo is available, render it as <img src="__LOGO_DATA_URI__" alt="logo" style="max-height:48px;max-width:160px;object-fit:contain;"> — use the literal placeholder string __LOGO_DATA_URI__ as the src value
 - Canvas dimensions are fixed — use position:absolute or CSS grid for precise placement
 - No external dependencies except Google Fonts
 - The entire post must be visible within the canvas — no overflow, no clipping of important content
@@ -388,9 +383,10 @@ BRAND DESIGN SIGNAL (from their actual website):
   const headlineFontWeight = (brandProfile.typography?.headline as Record<string, string | undefined>)?.fontWeight ?? "700";
   const bodyFontFamily = (brandProfile.typography?.body as Record<string, string | undefined>)?.fontFamily ?? "Inter";
 
-  // Embed logo data URI directly in the prompt so Claude sees the actual value
+  // Use a placeholder for the logo data URI to avoid consuming output tokens
+  // The actual data URI will be injected after generation
   const logoSection = logoDataUri
-    ? `Logo: provided as data URI below — use as <img src="..."> with max-height: 48px, max-width: 160px, object-fit: contain\n${logoDataUri}`
+    ? `Logo: available — use <img src="__LOGO_DATA_URI__" alt="logo" style="max-height:48px;max-width:160px;object-fit:contain;"> exactly as written`
     : "No logo available — render the brand name as styled text instead";
 
   const userPrompt = `Create a social media post as a complete HTML/CSS document.
@@ -428,12 +424,28 @@ ${retryContext}
 
 Write the complete HTML document now. Use the exact copy from the creative brief. Make it stunning.`;
 
-  const response = await client.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 8000,
-    system: ART_DIRECTOR_SYSTEM,
-    messages: [{ role: "user", content: userPrompt }],
-  });
+  // Retry on connection errors (transient network failures)
+  async function callWithRetry(attempt = 1): Promise<Awaited<ReturnType<typeof client.messages.create>>> {
+    try {
+      return await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 4000,
+        system: ART_DIRECTOR_SYSTEM,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+    } catch (err: unknown) {
+      const msg = (err as { message?: string }).message ?? "";
+      const isConnErr = msg.includes("Connection error") || msg.includes("ECONNRESET") || msg.includes("ETIMEDOUT") || msg.includes("fetch failed");
+      if (isConnErr && attempt < 3) {
+        const delay = attempt * 3000;
+        console.warn(`[Art Director] Connection error on attempt ${attempt}, retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        return callWithRetry(attempt + 1);
+      }
+      throw err;
+    }
+  }
+  const response = await callWithRetry();
 
   const content = response.content[0];
   if (content.type !== "text") throw new Error("Unexpected response type from Art Director");
@@ -448,6 +460,11 @@ Write the complete HTML document now. Use the exact copy from the creative brief
 
   if (!html.startsWith("<!DOCTYPE") && !html.startsWith("<html")) {
     throw new Error(`Art Director returned invalid HTML (first 200 chars): ${html.slice(0, 200)}`);
+  }
+
+  // Inject the actual logo data URI (replacing the placeholder)
+  if (logoDataUri && html.includes("__LOGO_DATA_URI__")) {
+    html = html.replaceAll("__LOGO_DATA_URI__", logoDataUri);
   }
 
   return html;

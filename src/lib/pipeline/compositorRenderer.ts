@@ -42,7 +42,7 @@ function pathToDataUri(filePath: string): string {
  */
 export function inlineLocalImages(html: string): string {
   // Match src="..." or src='...' where the value looks like an absolute path
-  return html.replace(/src=["']([^"']+)["']/g, (match, src) => {
+  let result = html.replace(/src=["']([^"']+)["']/g, (match, src) => {
     // Only process absolute local paths
     if (src.startsWith("/") || src.startsWith("file://")) {
       const filePath = src.startsWith("file://") ? src.slice(7) : src;
@@ -53,6 +53,17 @@ export function inlineLocalImages(html: string): string {
     }
     return match;
   });
+
+  // Also inline CSS background-image: url('/path/to/file') references
+  result = result.replace(/url\(["']?(\/[^"')]+)["']?\)/g, (match, src) => {
+    const dataUri = pathToDataUri(src);
+    if (dataUri) {
+      return `url("${dataUri}")`;
+    }
+    return match;
+  });
+
+  return result;
 }
 
 // ─── HTML Renderer ────────────────────────────────────────────────────────────
@@ -79,8 +90,14 @@ export async function renderHtml(
       deviceScaleFactor: 2, // 2x for retina quality
     });
 
-    // Set content and wait for network (Google Fonts) to load
-    await page.setContent(inlinedHtml, { waitUntil: "networkidle0", timeout: 30000 });
+    // Set content — use domcontentloaded to avoid hanging on Google Fonts
+    // Google Fonts may not load in headless environments; we fall back to system fonts
+    try {
+      await page.setContent(inlinedHtml, { waitUntil: "domcontentloaded", timeout: 15000 });
+    } catch {
+      // If even domcontentloaded times out, proceed anyway — content is likely rendered
+      console.warn("[renderer] setContent timeout — proceeding with screenshot");
+    }
 
     // Wait for all images to finish loading
     await page.evaluate(() => {
