@@ -492,7 +492,7 @@ export async function critiqueComposition(
   const base64Image = imageBuffer.toString("base64");
 
   const response = await client.messages.create({
-    model: "claude-opus-4-5",
+    model: "claude-sonnet-4-5",
     max_tokens: 1024,
     messages: [{
       role: "user",

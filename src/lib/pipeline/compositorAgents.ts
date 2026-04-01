@@ -164,7 +164,7 @@ Based on all of the above, output a creative strategy JSON:
 }`;
 
   const response = await client.messages.create({
-    model: "claude-opus-4-5",
+    model: "claude-sonnet-4-5",
     max_tokens: 1024,
     system: CREATIVE_STRATEGIST_SYSTEM,
     messages: [{ role: "user", content: payload }],
@@ -277,7 +277,7 @@ Write social copy for this post. Output JSON:
 }`;
 
   const response = await client.messages.create({
-    model: "claude-opus-4-5",
+    model: "claude-sonnet-4-5",
     max_tokens: 1024,
     system: SOCIAL_COPYWRITER_SYSTEM,
     messages: [{ role: "user", content: payload }],
@@ -399,7 +399,7 @@ Output JSON:
 }`;
 
   const response = await client.messages.create({
-    model: "claude-opus-4-5",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
     system: IMAGE_DIRECTOR_SYSTEM,
     messages: [{ role: "user", content: payload }],
