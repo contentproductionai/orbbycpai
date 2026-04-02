@@ -150,12 +150,17 @@ function saturation(hex: string): number {
 function contextWeight(contexts: string[]): number {
   const ctx = contexts.join(" ").toLowerCase();
   let weight = 1.0;
-  // Strong boost for structural brand colors (body background, hero, page canvas)
-  if (/area:body|body\.bg|bg-natural|bg-white|bg-black|hero|page-bg/.test(ctx)) weight *= 3.0;
-  if (/background|section|page/.test(ctx)) weight *= 1.8;
+  // Strong boost for structural brand colors (body background, hero, page canvas).
+  // Only boost true page-level backgrounds, NOT footer/nav/section backgrounds.
+  // Use \barea:body\b to avoid matching 'area:footer.bg-black' etc.
+  if (/\barea:body\b|\bbody\.bg-|\bbg-natural\b|\bhero\b|\bpage-bg\b/.test(ctx)) weight *= 4.0;
+  // Moderate boost for section/page-level backgrounds (but NOT footer/nav)
+  if (/area:section|area:main|area:article/.test(ctx)) weight *= 2.0;
   if (/subheadline|headline|h1|h2/.test(ctx)) weight *= 1.5;
   // Downweight UI element colors — CTA/button colors are not brand identity colors
-  if (/^cta:|cta:background/.test(ctx)) weight *= 0.4;
+  if (/cta:background/.test(ctx)) weight *= 0.3;
+  // Downweight footer and nav backgrounds — these are structural, not brand identity
+  if (/footer:background|nav:background|footer\.bg|nav\.bg/.test(ctx)) weight *= 0.5;
   if (/border|icon|divider/.test(ctx)) weight *= 0.5;
   return weight;
 }
@@ -261,13 +266,15 @@ function dedupeColors(
     }
   }
 
-  // Filter near-white and near-black, sort by count desc
+  // Filter pure black and pure white, but keep dark brand colors like #212121.
+  // Threshold: lum > 0.008 excludes #000000 (0.0) but includes #212121 (0.015).
+  // Upper threshold: lum < 0.97 excludes #ffffff (1.0) but includes #f5f5f5 (0.956).
   return deduped
     .filter((c) => {
       const rgb = hexToRgb(c.hex);
       if (!rgb) return false;
       const lum = rgbToLuminance(c.hex);
-      return lum > 0.02 && lum < 0.97; // exclude pure black and pure white
+      return lum > 0.008 && lum < 0.97;
     })
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);

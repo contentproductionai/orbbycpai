@@ -549,9 +549,18 @@ export function browserExtract(): Record<string, unknown> {
   };
   const spatial = spatialFor("body") ?? spatialFor("section") ?? { avgPadding: 16, avgMargin: 8 };
 
+  // Collect border-radius from actual CTA buttons (non-transparent background).
+  // Prioritize filled buttons over ghost/text buttons to capture pill shapes correctly.
+  // Tailwind's rounded-full computes to 9999px at runtime, which we capture here.
   const borderRadii: string[] = [];
-  for (const el of allButtons.slice(0, 5)) {
-    const r = window.getComputedStyle(el).borderRadius;
+  const filledButtons = allButtons.filter((el) => {
+    const cs = window.getComputedStyle(el as HTMLElement);
+    const bg = cs.backgroundColor;
+    return bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
+  });
+  const buttonsToSample = filledButtons.length > 0 ? filledButtons.slice(0, 5) : allButtons.slice(0, 5);
+  for (const el of buttonsToSample) {
+    const r = window.getComputedStyle(el as HTMLElement).borderRadius;
     if (r && r !== "0px") borderRadii.push(r);
   }
 

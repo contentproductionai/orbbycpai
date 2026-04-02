@@ -124,9 +124,61 @@ export async function extractLayoutTokens(
   const headlineFontWeight = (brandProfile.typography?.headline as Record<string, string | undefined>)?.fontWeight ?? "700";
   const bodyFontFamily = (brandProfile.typography?.body as Record<string, string | undefined>)?.fontFamily ?? "Inter";
 
-  // Extract the actual CTA button hex color from the color palette (cta:background context)
+  // Extract the actual CTA button hex color from the color palette (cta:background context).
+  // Filter out third-party payment button colors (Klarna, PayPal, Afterpay, etc.) which are
+  // almost always blue/purple (hue 200–280°) with high saturation. Brand CTAs in that range
+  // are extremely rare for DTC/lifestyle brands.
+  function hexToHsl(hex: string): [number, number, number] {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (max === min) return [0, 0, l];
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    let h = 0;
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+    return [h * 360, s * 100, l * 100];
+  }
+  function isThirdPartyPaymentColor(hex: string): boolean {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return false;
+    const [h, s] = hexToHsl(hex);
+    // Blue/purple range (200–280°) with moderate-to-high saturation = Klarna/PayPal/Afterpay signature.
+    // Threshold is 50% saturation — brand blues in this range are rare for DTC/lifestyle brands.
+    return h >= 200 && h <= 280 && s > 50;
+  }
+  function isGhostButtonColor(hex: string): boolean {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return false;
+    const [, , l] = hexToHsl(hex);
+    // Near-white (luminance > 85%) = ghost/outline button background, not a filled primary CTA
+    return l > 85;
+  }
   const ctaColorFromPalette = (brandProfile.colorPalette ?? [])
-    .find((c) => c.contexts.some((ctx) => /cta:background/.test(ctx)))?.hex ?? null;
+    .filter((c) => c.contexts.some((ctx) => /cta:background/.test(ctx)))
+    .filter((c) => !isThirdPartyPaymentColor(c.hex))
+    .filter((c) => !isGhostButtonColor(c.hex))
+    .sort((a, b) => b.count - a.count)[0]?.hex ?? null;
+
+  // Translate shape language to CSS border-radius value.
+  // Prefer designSignal.ctaStyle (vision-extracted) if available, otherwise fall back
+  // to shapeLanguage.classification (DOM-extracted from borderRadii).
+  // This ensures pill-shaped brands (Allbirds rounded-full buttons) get 999px radius.
+  const ctaStyleToBorderRadius: Record<string, string> = {
+    pill: "999px",
+    rounded: "8px",
+    "slightly-rounded": "6px",
+    sharp: "2px",
+    geometric: "4px",
+    ghost: "999px", // ghost buttons are usually pill-shaped
+    "text-only": "0px",
+  };
+  const shapeSource = brandProfile.designSignal?.ctaStyle
+    ?? brandProfile.shapeLanguage?.classification
+    ?? null;
+  const ctaStyleRadius = shapeSource ? ctaStyleToBorderRadius[shapeSource] ?? null : null;
 
   const userPrompt = `Extract design tokens for this social media post.
 
@@ -148,7 +200,7 @@ Body font: ${bodyFontFamily}
 Color palette (from their actual website):
 ${(brandProfile.colorPalette ?? []).slice(0, 6).map((c) => `  ${c.hex}: ${c.contexts.slice(0, 2).join(", ")}`).join("\n")}
 ${ctaColorFromPalette ? `CTA button background color (from website DOM): ${ctaColorFromPalette} — use this as ctaBgColor` : ""}
-${brandProfile.designSignal ? `CTA button shape style: ${brandProfile.designSignal.ctaStyle}` : ""}
+${ctaStyleRadius ? `CTA button border-radius (from website DOM): ${ctaStyleRadius} — use this as ctaBorderRadius` : brandProfile.designSignal ? `CTA button shape style: ${brandProfile.designSignal.ctaStyle}` : ""}
 
 ## VISUAL CONCEPT
 ${brief.visualDirection}
@@ -214,6 +266,11 @@ Return the JSON token object now. Remember: pick layoutVariant based on the bran
   tokens.googleFontsUrl = tokens.googleFontsUrl || `https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap`;
   tokens.ctaBorderRadius = tokens.ctaBorderRadius || "8px";
   tokens.imageFocalPoint = tokens.imageFocalPoint || "center";
+
+  // Hard overrides: DOM-extracted values always win over Haiku's inference.
+  // This prevents Haiku from hallucinating a different CTA color or border-radius.
+  if (ctaColorFromPalette) tokens.ctaBgColor = ctaColorFromPalette;
+  if (ctaStyleRadius) tokens.ctaBorderRadius = ctaStyleRadius;
 
   return tokens;
 }
