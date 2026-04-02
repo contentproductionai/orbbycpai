@@ -274,6 +274,15 @@ export function browserExtract(): Record<string, unknown> {
     }
   };
 
+  // Helper: find first element matching selector that is NOT inside a third-party widget
+  const queryBrandEl = (sel: string): Element | null => {
+    const els = Array.from(document.querySelectorAll(sel));
+    for (const el of els) {
+      if (!isThirdPartyElement(el)) return el;
+    }
+    return null;
+  };
+
   // HIGH-signal content elements (weight 3)
   const highTargets = [
     { sel: "h1", label: "h1" },
@@ -286,7 +295,7 @@ export function browserExtract(): Record<string, unknown> {
   ];
   for (const { sel, label } of highTargets) {
     try {
-      const el = document.querySelector(sel);
+      const el = queryBrandEl(sel);
       if (!el) continue;
       const fam = brandFamily(window.getComputedStyle(el).fontFamily);
       fontElementMap[label] = fam;
@@ -296,6 +305,7 @@ export function browserExtract(): Record<string, unknown> {
 
   // Scan up to 10 headings to catch per-heading font variation
   for (const el of Array.from(document.querySelectorAll("h1, h2, h3, h4")).slice(0, 10)) {
+    if (isThirdPartyElement(el)) continue;
     const fam = brandFamily(window.getComputedStyle(el).fontFamily);
     if (fam) addFontScore(fam, el.tagName.toLowerCase(), 2);
   }
@@ -308,7 +318,7 @@ export function browserExtract(): Record<string, unknown> {
   ];
   for (const { sel, label } of medTargets) {
     try {
-      const el = document.querySelector(sel);
+      const el = queryBrandEl(sel);
       if (!el) continue;
       const fam = brandFamily(window.getComputedStyle(el).fontFamily);
       fontElementMap[label] = fam;
@@ -323,7 +333,7 @@ export function browserExtract(): Record<string, unknown> {
   ];
   for (const { sel, label } of lowTargets) {
     try {
-      const el = document.querySelector(sel);
+      const el = queryBrandEl(sel);
       if (!el) continue;
       const fam = brandFamily(window.getComputedStyle(el).fontFamily);
       fontElementMap[label] = fam;
@@ -348,6 +358,8 @@ export function browserExtract(): Record<string, unknown> {
   ));
   const scoredImgs: { img: HTMLImageElement; score: number }[] = [];
   for (const el of navImgs) {
+    // Skip logos injected by third-party widgets (OneTrust, Intercom, etc.)
+    if (isThirdPartyElement(el)) continue;
     const img = el as HTMLImageElement;
     const w = img.naturalWidth;
     const h = img.naturalHeight;
@@ -378,6 +390,8 @@ export function browserExtract(): Record<string, unknown> {
       "header svg, nav svg, [class*='logo'] svg, [id*='logo'] svg, a[href='/'] svg, a[href='#'] svg"
     ));
     for (const el of navSvgs) {
+      // Skip SVGs injected by third-party widgets
+      if (isThirdPartyElement(el)) continue;
       const rect = el.getBoundingClientRect();
       // Allow rect.width === 0 (SVG not yet painted / inside hidden container)
       // Only skip if explicitly oversized
@@ -392,6 +406,8 @@ export function browserExtract(): Record<string, unknown> {
 
   if (!logo) {
     const topImgs = Array.from(document.querySelectorAll("img")).filter((img) => {
+      // Skip images from third-party widgets
+      if (isThirdPartyElement(img)) return false;
       const rect = img.getBoundingClientRect();
       const absTop = rect.top + window.scrollY;
       return absTop < pageHeight * 0.15 && img.naturalWidth > 0 && img.naturalWidth < 400 && img.naturalHeight < 200;
@@ -554,11 +570,13 @@ export function browserExtract(): Record<string, unknown> {
   // Tailwind's rounded-full computes to 9999px at runtime, which we capture here.
   const borderRadii: string[] = [];
   const filledButtons = allButtons.filter((el) => {
+    if (isThirdPartyElement(el)) return false;
     const cs = window.getComputedStyle(el as HTMLElement);
     const bg = cs.backgroundColor;
     return bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
   });
-  const buttonsToSample = filledButtons.length > 0 ? filledButtons.slice(0, 5) : allButtons.slice(0, 5);
+  const brandButtons = allButtons.filter((el) => !isThirdPartyElement(el));
+  const buttonsToSample = filledButtons.length > 0 ? filledButtons.slice(0, 5) : brandButtons.slice(0, 5);
   for (const el of buttonsToSample) {
     const r = window.getComputedStyle(el as HTMLElement).borderRadius;
     if (r && r !== "0px") borderRadii.push(r);
