@@ -150,8 +150,12 @@ function saturation(hex: string): number {
 function contextWeight(contexts: string[]): number {
   const ctx = contexts.join(" ").toLowerCase();
   let weight = 1.0;
-  if (/background|hero|page|section/.test(ctx)) weight *= 2.0;
+  // Strong boost for structural brand colors (body background, hero, page canvas)
+  if (/area:body|body\.bg|bg-natural|bg-white|bg-black|hero|page-bg/.test(ctx)) weight *= 3.0;
+  if (/background|section|page/.test(ctx)) weight *= 1.8;
   if (/subheadline|headline|h1|h2/.test(ctx)) weight *= 1.5;
+  // Downweight UI element colors — CTA/button colors are not brand identity colors
+  if (/^cta:|cta:background/.test(ctx)) weight *= 0.4;
   if (/border|icon|divider/.test(ctx)) weight *= 0.5;
   return weight;
 }
@@ -560,11 +564,15 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
   const logoRendering = bgLuminance < 0.5 ? "white" : "dark";
 
   // Primary and accent colors
-  const sortedColors = [...colors].sort(
-    (a, b) =>
-      saturation(b.hex) * Math.sqrt(b.count) * contextWeight(b.contexts) -
-      saturation(a.hex) * Math.sqrt(a.count) * contextWeight(a.contexts)
-  );
+  // Rank by frequency × context weight (how often the color appears in brand-relevant contexts).
+  // Saturation is used only as a secondary tiebreaker — many strong brand identities use
+  // low-saturation neutrals (Allbirds warm taupe, Apple white, etc.) as their primary color.
+  const sortedColors = [...colors].sort((a, b) => {
+    const scoreA = a.count * contextWeight(a.contexts);
+    const scoreB = b.count * contextWeight(b.contexts);
+    if (Math.abs(scoreA - scoreB) > 5) return scoreB - scoreA; // frequency wins
+    return saturation(b.hex) - saturation(a.hex); // tiebreak by saturation
+  });
   const primaryColor = sortedColors[0]?.hex ?? "#000000";
   const accentColor = sortedColors[1]?.hex ?? primaryColor;
 
