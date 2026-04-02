@@ -450,6 +450,10 @@ export async function runFullPipeline(
     JSON.stringify(brandProfile, null, 2)
   );
 
+  // Emit brand profile immediately so the UI can populate Brand Intel
+  // while image generation is still running
+  emit({ type: "brand", brandProfile });
+
   // Step 3: Run the 4-agent compositor pipeline
   // Topic Generator → 5 topics → Creative Strategist → Social Copywriter → Image Director → Art Director
   // Quality check is informational — no retries

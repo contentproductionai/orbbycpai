@@ -40,7 +40,7 @@ import type { CreativeBrief } from "./compositorGenerate";
 import type { CreativeStrategy } from "./compositorAgents";
 
 const QUALITY_THRESHOLD = 7;
-const TOPIC_COUNT = 5;
+const TOPIC_COUNT = 1; // TODO: restore to 5 once output quality is confirmed
 
 // All 4 platform sizes — rendered for every post
 const ALL_SIZES = ["portrait", "square", "story", "landscape"] as const;

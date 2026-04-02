@@ -571,8 +571,8 @@ function RightPanel({
 
         {/* Generation progress */}
         {isGenerating && (() => {
-          const TOTAL_IMAGES = 20; // 5 topics × 4 sizes
-          const completedImages = generationEvents.filter(ev => ev.type === "image").length;
+          const TOTAL_IMAGES = 4; // 1 topic × 4 sizes (testing mode — restore to 20 for production)
+          const completedImages = generationEvents.filter(ev => ev.type === "image" && !ev.isCarousel).length;
           // Before first image: animate progress based on status event count (caps at 40%)
           // After first image: track real progress
           const progressPct = completedImages === 0
@@ -613,7 +613,7 @@ function RightPanel({
               {/* Last completed images */}
               {completedImages > 0 && (
                 <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 3 }}>
-                  {generationEvents.filter(ev => ev.type === "image").slice(-3).map((ev, i) => (
+                  {generationEvents.filter(ev => ev.type === "image" && !ev.isCarousel).slice(-3).map((ev, i) => (
                     <div key={i} style={{ fontSize: 10, color: "var(--text-tertiary)", display: "flex", alignItems: "center", gap: 5 }}>
                       <span style={{ color: "var(--success)", fontSize: 9 }}>✓</span>
                       <span>{ev.schemaName} · {ev.size}</span>
@@ -1069,7 +1069,23 @@ export default function DashboardClient({ user, generations: initialGenerations,
             const event = JSON.parse(line.slice(6));
             setGenerationEvents((prev) => [...prev, event]);
 
-            if (event.type === "image") {
+            if (event.type === "brand") {
+              // Brand profile is ready — populate Brand Intel panel immediately
+              setGenerations((prev) =>
+                prev.map((g) =>
+                  g.id === generationId
+                    ? { ...g, brandProfile: event.brandProfile as Record<string, unknown> }
+                    : g
+                )
+              );
+              setSelectedGen((prev) =>
+                prev?.id === generationId
+                  ? { ...prev, brandProfile: event.brandProfile as Record<string, unknown> }
+                  : prev
+              );
+            }
+
+            if (event.type === "image" && !event.isCarousel) {
               const imgResult: ImageResult = {
                 schemaId: event.schemaId,
                 schemaName: event.schemaName,
