@@ -1,0 +1,150 @@
+/*
+ * Orb Component Library — Embedded Font Declarations
+ * ====================================================
+ * All fonts are loaded from local woff2 files.
+ * No external CDN requests. Safe for Puppeteer file:// rendering.
+ *
+ * Font families covered:
+ *   Barlow Condensed  — Layout 1 (BRUNT heading)
+ *   Barlow            — Layout 1 (BRUNT body)
+ *   DM Serif Display  — Layout 2 (Magic Mind stat)
+ *   DM Sans           — Layout 2 (Magic Mind body)
+ *   Space Grotesk     — Layout 3 (Cometeer heading)
+ *   Space Mono        — Layout 3 (Cometeer UI)
+ *   Work Sans         — Layout 4 (Grüns heading)
+ */
+/* Howler Brothers (Layout 5) removed — Playfair Display and Source Sans 3 not needed */
+
+/* ─── Barlow Condensed ──────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('../fonts/BarlowCondensed-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+  src: url('../fonts/BarlowCondensed-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url('../fonts/BarlowCondensed-900.woff2') format('woff2');
+}
+
+/* ─── Barlow ────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../fonts/Barlow-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url('../fonts/Barlow-600.woff2') format('woff2');
+}
+
+/* ─── DM Serif Display ──────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'DM Serif Display';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../fonts/DMSerifDisplay-Regular.woff2') format('woff2');
+}
+
+/* ─── DM Sans ───────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 300;
+  font-display: block;
+  src: url('../fonts/DMSans-300.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../fonts/DMSans-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url('../fonts/DMSans-500.woff2') format('woff2');
+}
+
+/* ─── Space Grotesk ─────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../fonts/SpaceGrotesk-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url('../fonts/SpaceGrotesk-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('../fonts/SpaceGrotesk-700.woff2') format('woff2');
+}
+
+/* ─── Space Mono ────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../fonts/SpaceMono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('../fonts/SpaceMono-700.woff2') format('woff2');
+}
+
+/* ─── Work Sans ─────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('../fonts/WorkSans-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+  src: url('../fonts/WorkSans-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url('../fonts/WorkSans-900.woff2') format('woff2');
+}
+

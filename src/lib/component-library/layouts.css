@@ -1,0 +1,712 @@
+/*
+ * Orb Component Library — Named Layout Classes
+ * =============================================
+ * Four layouts extracted from the four approved POC outputs.
+ * ZERO hardcoded brand values. All visual tokens are CSS custom properties.
+ *
+ * Layout names:
+ *   .orb-layout--dark-field-hero     (BRUNT pattern)
+ *   .orb-layout--split-stat          (Magic Mind pattern)
+ *   .orb-layout--split-steps         (Cometeer pattern)
+ *   .orb-layout--gradient-mascot     (Grüns pattern)
+ *
+ * Required CSS custom properties per layout — see each section header.
+ *
+ * Font families are embedded via @font-face in fonts.css (loaded separately).
+ * All layouts render at 1080×1080px (Instagram square).
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT 1: DARK FIELD HERO
+   Pattern: BRUNT
+   ─────────────────────────────────────────────────────────────────────────
+   Required tokens:
+     --brand-bg            Dark background color (e.g. #0f0f0f)
+     --brand-primary       Accent/brand color (e.g. #C74F1F)
+     --brand-font-heading  Condensed bold font family
+     --brand-font-body     Regular font family
+     --brand-image-url     Product/lifestyle image (right side, aggressive crop)
+     --brand-logo-url      Logo image or SVG data URI
+   Optional tokens:
+     --brand-eyebrow-text  Eyebrow label (overridden by data attribute)
+     --brand-headline-text Headline copy
+     --brand-body-text     Body copy
+     --brand-cta-text      CTA label
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.orb-layout--dark-field-hero {
+  position: relative;
+  width: 1080px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--brand-bg, #0f0f0f);
+}
+
+/* Product image — right side, aggressive crop with vignette fade */
+.orb-layout--dark-field-hero .l1-product-image {
+  position: absolute;
+  right: -40px;
+  bottom: -20px;
+  width: 720px;
+  height: 720px;
+  object-fit: cover;
+  object-position: center center;
+  mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+}
+
+/* Gradient overlay — left side for text legibility */
+.orb-layout--dark-field-hero .l1-gradient-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    var(--brand-bg, #0f0f0f) 0%,
+    var(--brand-bg, #0f0f0f) 35%,
+    color-mix(in srgb, var(--brand-bg, #0f0f0f) 85%, transparent) 50%,
+    color-mix(in srgb, var(--brand-bg, #0f0f0f) 20%, transparent) 70%,
+    transparent 85%
+  );
+  z-index: 2;
+}
+
+/* Accent bar — left edge */
+.orb-layout--dark-field-hero .l1-accent-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  background: var(--brand-primary, #C74F1F);
+  z-index: 10;
+}
+
+/* Logo — top left */
+.orb-layout--dark-field-hero .l1-logo {
+  position: absolute;
+  top: 56px;
+  left: 72px;
+  z-index: 10;
+  width: 80px;
+  height: auto;
+}
+
+/* Content zone — left column */
+.orb-layout--dark-field-hero .l1-content {
+  position: absolute;
+  left: 72px;
+  top: 0;
+  bottom: 0;
+  width: 520px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  z-index: 5;
+}
+
+/* Eyebrow */
+.orb-layout--dark-field-hero .l1-eyebrow {
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-primary, #C74F1F);
+  margin-bottom: 20px;
+}
+
+/* Headline — condensed bold, all caps */
+.orb-layout--dark-field-hero .l1-headline {
+  font-family: var(--brand-font-heading, sans-serif);
+  font-size: 108px;
+  font-weight: 900;
+  line-height: 0.92;
+  text-transform: uppercase;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+  margin-bottom: 32px;
+}
+
+/* Accent word within headline */
+.orb-layout--dark-field-hero .l1-headline .accent {
+  color: var(--brand-primary, #C74F1F);
+}
+
+/* Body copy */
+.orb-layout--dark-field-hero .l1-body {
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 380px;
+  margin-bottom: 48px;
+}
+
+/* CTA — text only with dash prefix */
+.orb-layout--dark-field-hero .l1-cta {
+  font-family: var(--brand-font-heading, sans-serif);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.orb-layout--dark-field-hero .l1-cta::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 2px;
+  background: var(--brand-primary, #C74F1F);
+  flex-shrink: 0;
+}
+
+/* Bottom strip */
+.orb-layout--dark-field-hero .l1-bottom-strip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--brand-primary, #C74F1F);
+  z-index: 10;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT 2: SPLIT STAT
+   Pattern: Magic Mind
+   ─────────────────────────────────────────────────────────────────────────
+   Required tokens:
+     --brand-bg            Background / left panel color (light gradient)
+     --brand-primary       Accent color (e.g. #3a9e7e teal)
+     --brand-text-primary  Primary text color (dark)
+     --brand-font-heading  Serif display font for the stat number
+     --brand-font-body     Sans-serif body font
+     --brand-image-url     Lifestyle photo (right half)
+     --brand-logo-url      Logo image
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.orb-layout--split-stat {
+  position: relative;
+  width: 1080px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--brand-bg, linear-gradient(145deg, #d4ede8 0%, #e8f4f0 25%, #f2f7f5 50%, #f7f2ec 75%, #f0e8e0 100%));
+}
+
+/* Lifestyle image — right half */
+.orb-layout--split-stat .l2-lifestyle-image {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 560px;
+  height: 1080px;
+  object-fit: cover;
+  object-position: 30% center;
+}
+
+/* Gradient fade from left into image */
+.orb-layout--split-stat .l2-image-fade {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 560px;
+  height: 1080px;
+  background: linear-gradient(
+    to right,
+    var(--brand-bg-solid, #e8f4f0) 0%,
+    color-mix(in srgb, var(--brand-bg-solid, #e8f4f0) 60%, transparent) 20%,
+    transparent 50%
+  );
+  z-index: 2;
+}
+
+/* Logo — top left */
+.orb-layout--split-stat .l2-logo {
+  position: absolute;
+  top: 60px;
+  left: 80px;
+  z-index: 10;
+  width: 120px;
+  height: auto;
+}
+
+/* Left content zone */
+.orb-layout--split-stat .l2-content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 580px;
+  height: 1080px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 80px 72px 80px 80px;
+  z-index: 5;
+}
+
+/* Badge / pill */
+.orb-layout--split-stat .l2-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 100px;
+  padding: 8px 18px;
+  margin-bottom: 32px;
+  width: fit-content;
+}
+
+.orb-layout--split-stat .l2-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-primary, #3a9e7e);
+  flex-shrink: 0;
+}
+
+.orb-layout--split-stat .l2-badge-text {
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-text-primary, #2a2a2a);
+}
+
+/* Stat number — oversized, dominant */
+.orb-layout--split-stat .l2-stat-number {
+  font-family: var(--brand-font-heading, serif);
+  font-size: 160px;
+  font-weight: 400;
+  line-height: 0.88;
+  color: var(--brand-text-primary, #1a1a1a);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+/* Stat unit — superscript accent */
+.orb-layout--split-stat .l2-stat-unit {
+  font-family: var(--brand-font-heading, serif);
+  font-size: 72px;
+  font-weight: 400;
+  color: var(--brand-primary, #3a9e7e);
+  vertical-align: super;
+  line-height: 1;
+}
+
+/* Stat label */
+.orb-layout--split-stat .l2-stat-label {
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--brand-text-secondary, #3a3a3a);
+  max-width: 340px;
+  margin-bottom: 52px;
+  letter-spacing: 0.01em;
+}
+
+/* Divider */
+.orb-layout--split-stat .l2-divider {
+  width: 48px;
+  height: 2px;
+  background: var(--brand-primary, #3a9e7e);
+  margin-bottom: 32px;
+}
+
+/* Supporting copy / testimonial */
+.orb-layout--split-stat .l2-supporting {
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: rgba(30, 30, 30, 0.65);
+  max-width: 360px;
+  font-style: italic;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT 3: SPLIT STEPS
+   Pattern: Cometeer
+   ─────────────────────────────────────────────────────────────────────────
+   Required tokens:
+     --brand-bg            Background color (light/cream field)
+     --brand-primary       Primary text / step circle color (dark)
+     --brand-accent        Accent underline / highlight color
+     --brand-font-heading  Bold geometric sans for headline
+     --brand-font-ui       Monospace UI font for eyebrow, step numbers, CTA
+     --brand-image-url     Lifestyle/process photo (left half)
+     --brand-logo-url      Logo image
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.orb-layout--split-steps {
+  position: relative;
+  width: 1080px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--brand-bg, #F7F0D3);
+}
+
+/* Process/lifestyle image — left half */
+.orb-layout--split-steps .l3-pour-image {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 540px;
+  height: 1080px;
+  object-fit: cover;
+  object-position: 60% center;
+}
+
+/* Cream fade from right into image */
+.orb-layout--split-steps .l3-image-fade {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 580px;
+  height: 1080px;
+  background: linear-gradient(
+    to left,
+    var(--brand-bg, #F7F0D3) 0%,
+    color-mix(in srgb, var(--brand-bg, #F7F0D3) 65%, transparent) 18%,
+    transparent 52%
+  );
+  z-index: 2;
+}
+
+/* Logo — top right */
+.orb-layout--split-steps .l3-logo {
+  position: absolute;
+  top: 56px;
+  right: 64px;
+  z-index: 10;
+}
+
+.orb-layout--split-steps .l3-logo img {
+  width: 180px;
+  height: auto;
+  opacity: 0.88;
+}
+
+/* Right content zone */
+.orb-layout--split-steps .l3-content {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 560px;
+  height: 1080px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 100px 64px 100px 48px;
+  z-index: 5;
+}
+
+/* Eyebrow */
+.orb-layout--split-steps .l3-eyebrow {
+  font-family: var(--brand-font-ui, monospace);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--brand-primary, #2C2B2B) 45%, transparent);
+  margin-bottom: 18px;
+}
+
+/* Headline */
+.orb-layout--split-steps .l3-headline {
+  font-family: var(--brand-font-heading, sans-serif);
+  font-size: 80px;
+  font-weight: 700;
+  line-height: 1.0;
+  color: var(--brand-primary, #2C2B2B);
+  letter-spacing: -0.025em;
+  margin-bottom: 28px;
+}
+
+/* Accent word with underline highlight */
+.orb-layout--split-steps .l3-headline .accent {
+  position: relative;
+  display: inline-block;
+}
+
+.orb-layout--split-steps .l3-headline .accent::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--brand-accent, #F5D577);
+  z-index: -1;
+}
+
+/* Rule */
+.orb-layout--split-steps .l3-rule {
+  width: 40px;
+  height: 3px;
+  background: var(--brand-primary, #2C2B2B);
+  margin-bottom: 24px;
+  opacity: 0.3;
+}
+
+/* Body copy */
+.orb-layout--split-steps .l3-body {
+  font-family: var(--brand-font-heading, sans-serif);
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--brand-primary, #2C2B2B) 65%, transparent);
+  max-width: 380px;
+  margin-bottom: 44px;
+}
+
+/* Steps list */
+.orb-layout--split-steps .l3-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 52px;
+}
+
+.orb-layout--split-steps .l3-step {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+/* Step number circle */
+.orb-layout--split-steps .l3-step-num {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--brand-primary, #2C2B2B);
+  color: var(--brand-bg, #F7F0D3);
+  font-family: var(--brand-font-ui, monospace);
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.orb-layout--split-steps .l3-step-text {
+  font-family: var(--brand-font-heading, sans-serif);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--brand-primary, #2C2B2B);
+  line-height: 1.3;
+}
+
+/* CTA — text only with underline accent */
+.orb-layout--split-steps .l3-cta {
+  font-family: var(--brand-font-ui, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-primary, #2C2B2B);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 2px solid var(--brand-accent, #F5D577);
+  padding-bottom: 4px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT 4: GRADIENT MASCOT
+   Pattern: Grüns
+   ─────────────────────────────────────────────────────────────────────────
+   Required tokens:
+     --brand-gradient-start  Gradient start color (deep primary)
+     --brand-gradient-mid    Gradient mid color
+     --brand-gradient-end    Gradient end color (bright accent)
+     --brand-gradient-angle  Gradient angle (e.g. 135deg)
+     --brand-primary         Text / headline color (white on gradient)
+     --brand-accent          Accent color for headline word, pill strongs, dots
+     --brand-font-heading    Bold sans for headline
+     --brand-font-body       Body sans for subhead, pills, bottom strip
+     --brand-image-url       Product/mascot cutout image (right side, bottom)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.orb-layout--gradient-mascot {
+  position: relative;
+  width: 1080px;
+  height: 1080px;
+  overflow: hidden;
+  background: linear-gradient(
+    var(--brand-gradient-angle, 135deg),
+    var(--brand-gradient-start, #00572C) 0%,
+    var(--brand-gradient-mid, #007E40) 40%,
+    color-mix(in srgb, var(--brand-gradient-mid, #007E40) 60%, var(--brand-gradient-end, #FFCC2F)) 65%,
+    var(--brand-gradient-end, #FFCC2F) 100%
+  );
+}
+
+/* Subtle dot texture */
+.orb-layout--gradient-mascot .l4-texture {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  z-index: 1;
+}
+
+/* Mascot/product cutout — right side, bottom-anchored */
+.orb-layout--gradient-mascot .l4-mascot {
+  position: absolute;
+  right: -60px;
+  bottom: -40px;
+  width: 680px;
+  height: 680px;
+  object-fit: contain;
+  object-position: center bottom;
+  z-index: 5;
+  filter: drop-shadow(0 0 32px rgba(255, 255, 255, 0.45)) drop-shadow(-16px -8px 32px rgba(0, 0, 0, 0.3));
+}
+
+/* Top content zone — logo left, badge right */
+.orb-layout--gradient-mascot .l4-top {
+  position: absolute;
+  top: 72px;
+  left: 72px;
+  right: 72px;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+/* Logo — text or image */
+.orb-layout--gradient-mascot .l4-logo {
+  font-family: var(--brand-font-heading, sans-serif);
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: #FFFFFF;
+  text-transform: lowercase;
+}
+
+.orb-layout--gradient-mascot .l4-logo img {
+  height: 36px;
+  width: auto;
+}
+
+/* Top-right badge pill */
+.orb-layout--gradient-mascot .l4-badge {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 100px;
+  padding: 10px 20px;
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: #FFFFFF;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+}
+
+/* Headline zone — left column, below top bar */
+.orb-layout--gradient-mascot .l4-headline-zone {
+  position: absolute;
+  left: 72px;
+  top: 200px;
+  width: 520px;
+  z-index: 10;
+}
+
+/* Headline */
+.orb-layout--gradient-mascot .l4-headline {
+  font-family: var(--brand-font-heading, sans-serif);
+  font-size: 96px;
+  font-weight: 900;
+  line-height: 0.93;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  margin-bottom: 28px;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Accent word in headline */
+.orb-layout--gradient-mascot .l4-headline .accent {
+  color: var(--brand-accent, #FFCC2F);
+}
+
+/* Subhead */
+.orb-layout--gradient-mascot .l4-subhead {
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.88);
+  max-width: 400px;
+  margin-bottom: 40px;
+}
+
+/* Stat pills row */
+.orb-layout--gradient-mascot .l4-pills {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.orb-layout--gradient-mascot .l4-pill {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 100px;
+  padding: 10px 20px;
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: #FFFFFF;
+  white-space: nowrap;
+}
+
+.orb-layout--gradient-mascot .l4-pill strong {
+  color: var(--brand-accent, #FFCC2F);
+  font-weight: 700;
+}
+
+/* Bottom ticker strip */
+.orb-layout--gradient-mascot .l4-bottom-strip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  padding: 0 72px;
+  gap: 32px;
+}
+
+.orb-layout--gradient-mascot .l4-bottom-text {
+  font-family: var(--brand-font-body, sans-serif);
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.orb-layout--gradient-mascot .l4-bottom-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-accent, #FFCC2F);
+  flex-shrink: 0;
+}
+

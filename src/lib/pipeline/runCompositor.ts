@@ -25,10 +25,10 @@ import {
   generateCreativeBrief,
   sourceHeroImage,
   segmentHeroImage,
-  generateComposition,
   critiqueComposition,
   generateVeoVideo,
 } from "./compositorGenerate";
+import { generateCompositionFromLibrary as generateComposition } from "../component-library/assembleHtml";
 import { generatePostTopics, type PostTopic } from "./compositorAgents";
 import { runCarouselForTopic, type CarouselResult } from "./runCarousel";
 import { renderHtml } from "./compositorRenderer";
@@ -211,7 +211,7 @@ export async function runCompositorPipeline(
         try {
           const html = await generateComposition(
             brandProfile,
-            segmented,
+            segmented.backgroundPath || segmented.originalPath || "",
             logoDataUri,
             dims.width,
             dims.height,
