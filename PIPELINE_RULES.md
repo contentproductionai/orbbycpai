@@ -74,3 +74,49 @@ If `backgroundLuminance > 0.6` (light background), `colorTheme` must be `light` 
 ## 5. One Fix, One Commit
 
 When a pipeline bug is found, fix exactly one root cause per commit. Do not bundle multiple fixes. This makes it possible to bisect regressions and confirm each fix independently before moving to the next.
+
+## 6. The Quality Bar & Extraction Architecture (Phase 1)
+
+### Rule
+The automated pipeline must replicate the manual POC process:
+1. Navigate to the brand's website in a real browser.
+2. Visually inspect the rendered page (colors, fonts, hero image, copy).
+3. Pull exact CSS values via `getComputedStyle` and `document.fonts` in the browser console.
+4. Download key images directly from the page.
+5. Read headlines, stats, and testimonials as visible text.
+6. Choose the layout that best showcases the strongest available asset.
+7. Build the HTML with everything correctly applied.
+
+### Why
+Headless scraping of unrendered DOMs (Puppeteer) fails on modern CSS-in-JS, WebGL, and anti-bot sites. The extraction engine must use a real browser to ensure visual rendering is complete before extraction.
+
+## 7. Product Page Deep Dive
+
+### Rule
+The extraction engine MUST navigate to at least one product page in addition to the homepage.
+
+### Why
+Homepages are for marketing; product pages have the substance. Product pages contain ingredient lists, clinical claims, specific stats, and SKU-level copy. This is the material that makes generated copy credible, not generic.
+
+## 8. Redundancy & Fallbacks
+
+### Rule
+Every AI call must have a non-AI fallback. If the perfect color cannot be extracted, use a close approximation. Degraded output is better than no output. Log every failure with context (URL, screenshot, extracted data, failed step) to allow for manual review.
+
+## 9. Dual-Ingestion Model
+
+### Rule
+The platform must support both Auto-Extract (paste a URL) and Manual Profile (Brand Repository). The Manual Profile is a first-class feature, not a fallback, allowing users to upload hex codes, fonts, and product images directly into a persistent workspace.
+
+## 10. Platform Aesthetic
+
+### Rule
+The platform aesthetic is light, warm backgrounds (e.g., `#FAF8F4` cream/off-white). Dark mode is retired. Use fluorescent accents (teal `#00e5a0`, hot pink `#ff01c7`, electric yellow `#e1ff00`) aggressively. Retain all UFO imagery and iconography. Typography must be clean, modern, confident, and large.
+
+## 11. Development Principles
+
+### Rule
+- **Ask Before Building:** Always ask clarifying questions before building. Never start coding without confirming the approach first.
+- **No Scope Creep:** Never add features that weren't explicitly requested. Build the simplest version that works, then wait for approval.
+- **Diagnose Before Fixing:** When something fails, diagnose the root cause before attempting a fix. Never try more than one solution at a time.
+- **Verify Completion:** Always confirm what you built works before declaring a step complete.
