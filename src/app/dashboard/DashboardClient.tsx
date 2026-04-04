@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
@@ -82,6 +82,14 @@ function getBrandInitials(gen: Generation): string {
 
 function getPrimaryColor(gen: Generation): string {
   return (gen.brandProfile?.primaryColor as string) || "#00d4aa";
+}
+
+function getBrandFavicon(gen: Generation): string | null {
+  const meta = gen.brandProfile?.meta as Record<string, unknown> | undefined;
+  const favicon = (meta?.favicon as string) ?? (gen.brandProfile?.favicon as string) ?? null;
+  // Only return if it looks like a real URL (not empty or data: URI which can be huge)
+  if (!favicon || favicon.startsWith("data:") || favicon.length < 4) return null;
+  return favicon;
 }
 
 function getStatusColor(status: string): string {
@@ -382,6 +390,39 @@ function NewGenerationModal({
   );
 }
 
+// ─── Brand Avatar ───────────────────────────────────────────────────────────
+
+function BrandAvatar({ gen, initials, primaryColor }: { gen: Generation; initials: string; primaryColor: string }) {
+  const favicon = getBrandFavicon(gen);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const containerStyle: React.CSSProperties = {
+    width: 36, height: 36, borderRadius: "var(--radius-md)", flexShrink: 0,
+    background: `${primaryColor}22`, border: `1px solid ${primaryColor}44`,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    overflow: "hidden",
+  };
+
+  if (favicon && !imgFailed) {
+    return (
+      <div style={containerStyle}>
+        <img
+          src={favicon}
+          alt=""
+          onError={() => setImgFailed(true)}
+          style={{ width: 22, height: 22, objectFit: "contain" }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...containerStyle, fontSize: 11, fontWeight: 700, color: primaryColor, letterSpacing: "0.04em" }}>
+      {initials}
+    </div>
+  );
+}
+
 // ─── Generation Card ──────────────────────────────────────────────────────────
 
 function GenerationCard({
@@ -416,14 +457,7 @@ function GenerationCard({
       }}
     >
       {/* Brand avatar */}
-      <div style={{
-        width: 36, height: 36, borderRadius: "var(--radius-md)", flexShrink: 0,
-        background: `${primaryColor}22`, border: `1px solid ${primaryColor}44`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 700, color: primaryColor, letterSpacing: "0.04em",
-      }}>
-        {initials}
-      </div>
+      <BrandAvatar gen={gen} initials={initials} primaryColor={primaryColor} />
 
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
