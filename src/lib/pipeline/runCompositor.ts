@@ -113,7 +113,7 @@ export async function runCompositorPipeline(
   fs.mkdirSync(workDir, { recursive: true });
   const allResults: CompositorResult[] = [];
   const generateVideo = options?.generateVideo ?? false;
-  const generateCarousel = options?.generateCarousel ?? true; // Carousel enabled by default
+  const generateCarousel = options?.generateCarousel ?? false; // Carousel disabled until explicitly re-enabled
 
   // ── Step 0: Topic Generator — produce 5 distinct post topics ─────────────
   emit({ type: "status", step: 1, total: 7, message: "Planning content strategy..." });

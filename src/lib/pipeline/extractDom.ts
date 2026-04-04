@@ -158,13 +158,74 @@ export async function extractDom(
     // page context before any HTML/CSS is parsed, making it safe on Stripe, HubSpot, etc.
     await page.evaluateOnNewDocument(BROWSER_SCRIPT_CONTENT);
 
+    // ── Pop-up / modal suppression ─────────────────────────────────────────────
+    // 90%+ of DTC sites fire a pop-up on first visit. Puppeteer looks like a new
+    // visitor every time, so it always gets the pop-up. We suppress it two ways:
+    //   1. Pre-set localStorage/cookie flags that pop-up scripts check before firing
+    //   2. After load, forcibly remove any visible overlay/modal/pop-up elements
+    // This must run BEFORE navigation so the flags are present when the page loads.
+    await page.evaluateOnNewDocument(() => {
+      // Common localStorage keys used by pop-up scripts to track "already seen"
+      const suppressKeys = [
+        "hasSeenPopup", "popupSeen", "popup_seen", "modal_seen", "hasSeenModal",
+        "newsletter_popup", "email_popup", "klaviyo_popup", "privy_seen",
+        "justuno_seen", "wheelio_seen", "spin_seen", "discount_popup",
+        "welcome_popup", "exit_popup", "coupon_popup",
+      ];
+      suppressKeys.forEach(k => {
+        try { localStorage.setItem(k, "true"); } catch (_) {}
+      });
+      // Common sessionStorage keys
+      suppressKeys.forEach(k => {
+        try { sessionStorage.setItem(k, "true"); } catch (_) {}
+      });
+      // Klaviyo-specific: mark as subscribed
+      try { localStorage.setItem("__klOnsite", JSON.stringify({ shown: true, dismissed: true })); } catch (_) {}
+      // Privy-specific
+      try { localStorage.setItem("privy_dismissed", "true"); } catch (_) {}
+      try { localStorage.setItem("privy_shown", "true"); } catch (_) {}
+    });
+
     try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
     } catch (e) {
       console.warn("[extractDom] page.goto error (continuing):", (e as Error).message);
     }
 
-    await new Promise((r) => setTimeout(r, 2000));
+    // After load, forcibly remove any pop-up/modal/overlay elements still visible.
+    // This catches pop-ups that fire on a timer or ignore localStorage flags.
+    await new Promise((r) => setTimeout(r, 1500));
+    await page.evaluate(() => {
+      const selectors = [
+        // Generic overlay/modal patterns
+        "[class*='popup']", "[class*='modal']", "[class*='overlay']",
+        "[class*='Popup']", "[class*='Modal']", "[class*='Overlay']",
+        "[id*='popup']", "[id*='modal']", "[id*='overlay']",
+        "[id*='Popup']", "[id*='Modal']", "[id*='Overlay']",
+        // Common pop-up platforms
+        "[class*='klaviyo']", "[class*='privy']", "[class*='justuno']",
+        "[class*='wheelio']", "[class*='spin-to-win']",
+        "[data-testid*='popup']", "[data-testid*='modal']",
+        // Fixed/absolute positioned elements covering viewport
+      ];
+      selectors.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+          const rect = (el as HTMLElement).getBoundingClientRect();
+          const style = window.getComputedStyle(el as HTMLElement);
+          // Only remove if it's actually covering significant viewport area
+          const isOverlay = (rect.width > 300 && rect.height > 200) ||
+            style.position === "fixed" || style.position === "absolute";
+          if (isOverlay) {
+            (el as HTMLElement).style.display = "none";
+          }
+        });
+      });
+      // Also remove body overflow:hidden that pop-ups add to lock scroll
+      document.body.style.overflow = "auto";
+      document.documentElement.style.overflow = "auto";
+    }).catch(() => {}); // Non-fatal — continue even if this fails
+
+    await new Promise((r) => setTimeout(r, 500));
 
     emit?.({ type: "status", step: 2, total: 6, message: "Scanning colors and fonts..." });
 

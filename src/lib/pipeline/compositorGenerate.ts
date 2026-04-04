@@ -224,7 +224,6 @@ export async function generateVeoVideo(
         parameters: {
           aspectRatio: "9:16",
           durationSeconds: 8,
-          outputMimeType: "video/mp4",
         },
       }),
     });

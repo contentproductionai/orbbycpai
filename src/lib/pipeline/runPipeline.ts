@@ -461,7 +461,7 @@ export async function runFullPipeline(
   emit({ type: "status", step: 4, total: 5, message: "Generating content..." });
   console.log("[pipeline] Starting compositor pipeline...");
 
-  const compositorResults = await runCompositorPipeline(brandProfile, workDir, emit);
+  const compositorResults = await runCompositorPipeline(brandProfile, workDir, emit, { generateVideo: process.env.TEST_GENERATE_VIDEO === "true" });
 
   const images: ImageResult[] = compositorResults.map((r) => ({
     schemaId: r.schemaId,
@@ -492,7 +492,7 @@ export async function runRenderOnly(
 
   // Run the 4-agent compositor pipeline (same as full pipeline, skips extraction)
   emit({ type: "status", step: 2, total: 3, message: "Generating content..." });
-  const compositorResults = await runCompositorPipeline(brandProfile, workDir, emit);
+  const compositorResults = await runCompositorPipeline(brandProfile, workDir, emit, { generateVideo: process.env.TEST_GENERATE_VIDEO === "true" });
 
   const images: ImageResult[] = compositorResults.map((r) => ({
     schemaId: r.schemaId,

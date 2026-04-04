@@ -29,7 +29,28 @@ import { selectLayout, type LayoutSelection } from "./layoutSelector";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-const COMPONENT_LIB_DIR = path.join(__dirname);
+// In development: __dirname = src/lib/component-library/ (correct)
+// In Railway standalone build: __dirname = .next/server/chunks/ (wrong)
+// outputFileTracingIncludes copies files to .next/standalone/src/lib/component-library/
+// process.cwd() at runtime = .next/standalone/ (the standalone root)
+// So we try __dirname first, then fall back to process.cwd() + known path.
+function resolveComponentLibDir(): string {
+  const fromDirname = path.join(__dirname);
+  if (fs.existsSync(path.join(fromDirname, "layouts.css"))) return fromDirname;
+  // Railway standalone fallback
+  const fromCwd = path.join(process.cwd(), "src", "lib", "component-library");
+  if (fs.existsSync(path.join(fromCwd, "layouts.css"))) return fromCwd;
+  // Last resort: walk up from __dirname
+  let dir = __dirname;
+  for (let i = 0; i < 6; i++) {
+    const candidate = path.join(dir, "src", "lib", "component-library");
+    if (fs.existsSync(path.join(candidate, "layouts.css"))) return candidate;
+    dir = path.dirname(dir);
+  }
+  throw new Error(`[assembleHtml] Cannot locate component-library directory. __dirname=${__dirname} cwd=${process.cwd()}`);
+}
+
+const COMPONENT_LIB_DIR = resolveComponentLibDir();
 const FONTS_CSS_PATH     = path.join(COMPONENT_LIB_DIR, "fonts.css");
 const LAYOUTS_CSS_PATH   = path.join(COMPONENT_LIB_DIR, "layouts.css");
 const FONTS_DIR          = path.join(COMPONENT_LIB_DIR, "fonts");

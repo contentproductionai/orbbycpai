@@ -503,7 +503,7 @@ function RightPanel({
   generation: Generation | null;
   onGenerate: (generationId: string) => void;
   isGenerating: boolean;
-  generationEvents: Array<{ type: string; message?: string; schemaId?: string; schemaName?: string; url?: string; size?: string }>;
+  generationEvents: Array<{ type: string; message?: string; schemaId?: string; schemaName?: string; url?: string; size?: string; isCarousel?: boolean }>;
   onImageClick: (src: string) => void;
 }) {
   if (!generation) {
@@ -605,7 +605,8 @@ function RightPanel({
 
         {/* Generation progress */}
         {isGenerating && (() => {
-          const TOTAL_IMAGES = 4; // 1 topic × 4 sizes (testing mode — restore to 20 for production)
+          // 1 topic × 4 sizes = 4 images. When TOPIC_COUNT is restored to 5, this becomes 20.
+          const TOTAL_IMAGES = 4;
           const completedImages = generationEvents.filter(ev => ev.type === "image" && !ev.isCarousel).length;
           // Before first image: animate progress based on status event count (caps at 40%)
           // After first image: track real progress
@@ -658,6 +659,24 @@ function RightPanel({
             </div>
           );
         })()}
+
+        {/* Brand Intel loading skeleton — shown while generating and profile not yet populated */}
+        {isGenerating && !pi && (
+          <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-tertiary)", marginBottom: 10 }}>
+              Analyzing Brand
+            </div>
+            {["80%", "60%", "90%", "50%"].map((w, i) => (
+              <div key={i} style={{
+                height: 10, borderRadius: 4, marginBottom: 8,
+                background: "var(--bg-overlay)",
+                width: w,
+                animation: `pulse-glow ${1.2 + i * 0.15}s ease-in-out infinite`,
+                opacity: 0.5,
+              }} />
+            ))}
+          </div>
+        )}
 
         {/* Generated Images */}
         {generation.images.length > 0 && (
@@ -1011,7 +1030,7 @@ export default function DashboardClient({ user, generations: initialGenerations,
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [generationEvents, setGenerationEvents] = useState<Array<{
-    type: string; message?: string; schemaId?: string; schemaName?: string; url?: string; size?: string;
+    type: string; message?: string; schemaId?: string; schemaName?: string; url?: string; size?: string; isCarousel?: boolean;
   }>>([]);
 
   async function handleGenerate(generationId: string) {
