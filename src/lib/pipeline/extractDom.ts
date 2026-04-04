@@ -206,6 +206,29 @@ export async function extractDom(
         "[class*='klaviyo']", "[class*='privy']", "[class*='justuno']",
         "[class*='wheelio']", "[class*='spin-to-win']",
         "[data-testid*='popup']", "[data-testid*='modal']",
+        // ── Consent / cookie-banner vendors ──────────────────────────────────
+        // Each vendor uses its own prefix — generic [class*='cookie'] misses them.
+        // CookieYes: cky-
+        "[class*='cky']", "[id*='cky']",
+        // OneTrust: onetrust-
+        "[class*='onetrust']", "[id*='onetrust']",
+        // Osano: osano-
+        "[class*='osano']", "[id*='osano']",
+        // Cookiebot / Cybot: CybotCookiebanner
+        "[class*='CybotCookie']", "[id*='CybotCookie']",
+        // TrustArc / TRUSTe
+        "[class*='trustarc']", "[id*='trustarc']", "[class*='truste']", "[id*='truste']",
+        // Termly
+        "[class*='termly']", "[id*='termly']",
+        // Complianz
+        "[class*='cmplz']", "[id*='cmplz']",
+        // Usercentrics
+        "[class*='usercentrics']", "[id*='usercentrics']",
+        // Generic cookie/consent/gdpr/ccpa class and id patterns
+        "[class*='cookie-banner']", "[class*='cookie-bar']", "[class*='cookie-notice']",
+        "[class*='consent-banner']", "[class*='consent-bar']", "[class*='gdpr-banner']",
+        "[id*='cookie-banner']", "[id*='cookie-bar']", "[id*='cookie-notice']",
+        "[id*='consent-banner']", "[id*='gdpr']", "[id*='ccpa']",
         // Fixed/absolute positioned elements covering viewport
       ];
       selectors.forEach(sel => {
