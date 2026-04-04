@@ -461,8 +461,18 @@ export function browserExtract(): Record<string, unknown> {
     }
     if (stats.length >= 6) break;
   }
+  // Single-stat fallback: if AND-validated grid scan found nothing, include
+  // isolated stat+label pairs (e.g. Magic Mind's "5×" hero stat).
+  if (stats.length === 0) {
+    for (const c of statCandidates) {
+      if (!stats.find((s) => s.value === c.value)) {
+        stats.push({ value: c.value, label: c.label });
+      }
+      if (stats.length >= 3) break;
+    }
+  }
 
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════
   // TESTIMONIALS DISCOVERY (AND-validated)
   // ═══════════════════════════════════════════════════════════════════════
 

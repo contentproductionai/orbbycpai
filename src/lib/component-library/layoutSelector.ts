@@ -158,11 +158,16 @@ export function selectLayout(
   heroImagePath: string,
   logoDataUri: string | null
 ): LayoutSelection {
-  const colorTheme = brief.colorTheme ?? "light";
+  // Override colorTheme with ground truth from backgroundLuminance.
+  // The Creative Strategist may classify a brand as "dark" based on photography mood,
+  // but the actual page background luminance is the authoritative signal for layout choice.
+  // backgroundLuminance > 0.5 means the brand's website has a light background → use light layouts.
+  const bgLuminance = brand.backgroundLuminance ?? 0.5;
+  const colorTheme = bgLuminance > 0.5 ? "light" : (brief.colorTheme ?? "dark");
   const postAngle  = brief._fullBrief?.strategy?.postAngle ?? "brand_awareness";
   const hasStat    = (brief.keyStats ?? []).length > 0 && (brief.keyStats ?? [])[0] !== "";
 
-  // Rule 1: Dark brand → dark-field-hero
+  // Rule 1: Dark brand → dark-field-hero (only when page background is actually dark)
   if (colorTheme === "dark") {
     return {
       layoutClass: "orb-layout--dark-field-hero",
