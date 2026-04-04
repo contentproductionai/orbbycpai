@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build:assets": "node src/lib/component-library/buildInlineAssets.mjs",
+    "build": "node src/lib/component-library/buildInlineAssets.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "postbuild": "cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static 2>/dev/null || true"
