@@ -197,12 +197,30 @@ export async function classifyVisual(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   // Read screenshot as base64
+  // Claude Vision does not support WebP — convert to JPEG first if needed
   let imageBase64 = "";
   let imageMediaType: "image/jpeg" | "image/png" = "image/jpeg";
   try {
-    const buf = fs.readFileSync(viewportScreenshotPath);
+    let screenshotToRead = viewportScreenshotPath;
+    if (viewportScreenshotPath.endsWith(".webp")) {
+      const { execSync } = require("child_process") as typeof import("child_process");
+      const jpegPath = viewportScreenshotPath.replace(/\.webp$/, "_converted.jpg");
+      if (!fs.existsSync(jpegPath)) {
+        try {
+          execSync(`ffmpeg -y -i "${viewportScreenshotPath}" "${jpegPath}" 2>/dev/null`, { stdio: "pipe" });
+        } catch {
+          // ffmpeg not available, try ImageMagick convert
+          execSync(`convert "${viewportScreenshotPath}" "${jpegPath}" 2>/dev/null`, { stdio: "pipe" });
+        }
+      }
+      if (fs.existsSync(jpegPath)) {
+        screenshotToRead = jpegPath;
+        console.log(`[classifyVisual] Converted WebP screenshot to JPEG: ${jpegPath}`);
+      }
+    }
+    const buf = fs.readFileSync(screenshotToRead);
     imageBase64 = buf.toString("base64");
-    imageMediaType = viewportScreenshotPath.endsWith(".png") ? "image/png" : "image/jpeg";
+    imageMediaType = screenshotToRead.endsWith(".png") ? "image/png" : "image/jpeg";
   } catch (e) {
     console.warn("[classifyVisual] Could not read screenshot:", (e as Error).message);
   }

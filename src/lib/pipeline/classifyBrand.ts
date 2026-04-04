@@ -580,8 +580,20 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
     if (Math.abs(scoreA - scoreB) > 5) return scoreB - scoreA; // frequency wins
     return saturation(b.hex) - saturation(a.hex); // tiebreak by saturation
   });
-  const primaryColor = sortedColors[0]?.hex ?? "#000000";
-  const accentColor = sortedColors[1]?.hex ?? primaryColor;
+  // Use visual classification colors if available (they were extracted from the actual screenshot
+  // and are more reliable than the DOM palette for CSS-in-JS sites like Magic Mind).
+  // raw.brandPrimary is set by runPipeline after classifyVisual runs.
+  const visualPrimary = raw.brandPrimary as string | undefined;
+  const visualAccent = (raw.accentColor ?? raw.brandSecondary) as string | undefined;
+  const domPrimary = sortedColors[0]?.hex ?? "#000000";
+  const domAccent = sortedColors[1]?.hex ?? domPrimary;
+  // Prefer visual classification over DOM if it found a non-neutral color
+  const primaryColor = (visualPrimary && visualPrimary !== "#000000" && visualPrimary !== "#ffffff")
+    ? visualPrimary
+    : domPrimary;
+  const accentColor = (visualAccent && visualAccent !== "#000000" && visualAccent !== "#ffffff")
+    ? visualAccent
+    : domAccent;
 
   // Build typography from discoveredFonts + fontElementMap (raw.typography is never set by
   // the browser script — the actual data lives in raw.discoveredFonts and raw.fontElementMap).

@@ -31,6 +31,8 @@ import * as path from "path";
 import * as https from "https";
 import * as http from "http";
 import { execSync } from "child_process";
+import Anthropic from "@anthropic-ai/sdk";
+import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 import type { EmitFn } from "./types";
 
 // Path to the plain-JS browser script (relative to this file at runtime)
@@ -125,8 +127,12 @@ function sanitizeFilename(url: string, index: number): string {
 export async function extractDom(
   url: string,
   workDir: string,
-  emit?: EmitFn
+  emit?: EmitFn,
+  externalScreenshotPath?: string
 ): Promise<Record<string, unknown>> {
+  // When externalScreenshotPath is provided (hybrid mode), skip Puppeteer screenshot.
+  // The screenshot was taken by the agent's real browser and is already verified.
+  const useExternalScreenshot = !!externalScreenshotPath && fs.existsSync(externalScreenshotPath);
 
   // Browser script content is pre-loaded at module init (BROWSER_SCRIPT_CONTENT)
 
@@ -139,7 +145,10 @@ export async function extractDom(
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
-      "--disable-gpu",
+      // NOTE: --disable-gpu intentionally omitted.
+      // It causes blank screenshots on sites using GPU-rendered gradients
+      // (WebGL, CSS backdrop-filter). Railway containers handle headless
+      // Chrome without it using --no-sandbox + --disable-dev-shm-usage.
       "--ignore-certificate-errors",
     ],
   });
@@ -186,15 +195,24 @@ export async function extractDom(
       try { localStorage.setItem("privy_shown", "true"); } catch (_) {}
     });
 
+    // ── FIX 1: Wait for networkidle2 instead of domcontentloaded ───────────────
+    // domcontentloaded fires before CSS-in-JS frameworks (Next.js/Tailwind) have
+    // injected their styles. networkidle2 waits until network activity settles,
+    // giving JS time to apply computed styles before we extract them.
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
     } catch (e) {
-      console.warn("[extractDom] page.goto error (continuing):", (e as Error).message);
+      // networkidle2 can time out on sites with persistent background requests
+      // (analytics pings, websockets). Fall back to domcontentloaded result.
+      console.warn("[extractDom] networkidle2 timeout (continuing with current state):", (e as Error).message);
     }
 
+    // ── FIX 2: Extended settle time after navigation ──────────────────────────
+    // Give CSS-in-JS an extra 3 seconds to finish injecting styles after network
+    // settles. This covers slow hydration on Shopify Hydrogen, Next.js, etc.
     // After load, forcibly remove any pop-up/modal/overlay elements still visible.
     // This catches pop-ups that fire on a timer or ignore localStorage flags.
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 3000));
     await page.evaluate(() => {
       const selectors = [
         // Generic overlay/modal patterns
@@ -272,17 +290,67 @@ export async function extractDom(
     await new Promise((r) => setTimeout(r, 1500));
 
     // Full-page screenshot for Claude Vision classification step
-    const screenshotPath = path.join(workDir, "screenshot.png");
-    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+    // In hybrid mode, use the externally-provided screenshot instead of taking one with Puppeteer.
+    // This gives us a verified, fully-rendered screenshot from the agent's real browser.
+    const screenshotPath = useExternalScreenshot
+      ? externalScreenshotPath!
+      : path.join(workDir, "screenshot.png");
+    const viewportScreenshotPath = useExternalScreenshot
+      ? externalScreenshotPath!
+      : path.join(workDir, "screenshot_viewport.jpg");
+    if (!useExternalScreenshot) {
+      await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+      await page.screenshot({
+        path: viewportScreenshotPath,
+        fullPage: false,
+        type: "jpeg",
+        quality: 80,
+      }).catch(() => {});
+    } else {
+      console.log(`[extractDom] Using external screenshot: ${externalScreenshotPath}`);
+    };
 
-    // Viewport-only screenshot for the vision call (smaller file)
-    const viewportScreenshotPath = path.join(workDir, "screenshot_viewport.jpg");
-    await page.screenshot({
-      path: viewportScreenshotPath,
-      fullPage: false,
-      type: "jpeg",
-      quality: 80,
-    }).catch(() => {});
+    // ── FIX 3: Claude Vision render verification ──────────────────────────────
+    // Skip verification in hybrid mode — the external screenshot is already verified
+    // (it was taken by the agent's real browser and visually confirmed).
+    if (!useExternalScreenshot && fs.existsSync(viewportScreenshotPath)) {
+      try {
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        const imgBuf = fs.readFileSync(viewportScreenshotPath);
+        const imgBase64 = imgBuf.toString("base64");
+        const verifyResponse = await withAnthropicRetry(
+          () => anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 64,
+            messages: [{
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imgBase64 } },
+                { type: "text", text: `Does this screenshot show a fully rendered brand homepage with visible colors, text, and design elements? Or does it show a blank page, loading spinner, error, or mostly white/unstyled content? Reply with exactly one word: RENDERED or BLANK.` },
+              ],
+            }],
+          }),
+          "extractDom:renderVerify"
+        );
+        const verdict = (verifyResponse.content[0] as { text: string }).text.trim().toUpperCase();
+        console.log(`[extractDom] Render verification: ${verdict}`);
+        if (verdict === "BLANK") {
+          console.log("[extractDom] Page appears unrendered — waiting 4s and retaking screenshot...");
+          await new Promise((r) => setTimeout(r, 4000));
+          await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+          await page.screenshot({
+            path: viewportScreenshotPath,
+            fullPage: false,
+            type: "jpeg",
+            quality: 80,
+          }).catch(() => {});
+          console.log("[extractDom] Retook screenshot after extended wait");
+        }
+      } catch (e) {
+        // Verification is non-fatal — if it fails, proceed with what we have
+        console.warn("[extractDom] Render verification failed (non-fatal):", (e as Error).message);
+      }
+    }
 
     emit?.({ type: "status", step: 3, total: 6, message: "Reading page copy and product signals..." });
 

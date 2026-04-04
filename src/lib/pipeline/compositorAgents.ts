@@ -109,8 +109,8 @@ export async function generateCreativeStrategy(
 ): Promise<CreativeStrategy> {
   const client = new Anthropic();
 
-  const pi = brandProfile.productIntelligence ?? {};
-  const tone = brandProfile.tone ?? {};
+  const pi = (brandProfile.productIntelligence ?? {}) as NonNullable<BrandProfile["productIntelligence"]>;
+  const tone = (brandProfile.tone ?? {}) as NonNullable<BrandProfile["tone"]>;
   const stats = (brandProfile.statistics ?? [])
     .map((s) => `${s.value} ${s.label}`)
     .join(", ");
@@ -501,7 +501,7 @@ export async function generatePostTopics(
 ): Promise<PostTopic[]> {
   const client = new Anthropic();
 
-  const pi = brandProfile.productIntelligence ?? {};
+  const pi = (brandProfile.productIntelligence ?? {}) as NonNullable<BrandProfile["productIntelligence"]>;
   const stats = (brandProfile.statistics ?? [])
     .map((s) => `${s.value} ${s.label}`)
     .join(", ");

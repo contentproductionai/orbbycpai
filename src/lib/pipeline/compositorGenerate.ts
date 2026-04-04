@@ -335,7 +335,19 @@ CORE DESIGN RULES (non-negotiable):
 
 LAYOUT STYLES — implement these faithfully:
 - "full-bleed portrait": hero image fills entire canvas. Gradient scrim covers bottom 45% (transparent to brand background color). Logo top-left (48px from edges). Headline large (52-64px), bottom-left. Subheadline (18-20px) below headline. CTA button bottom-left or bottom-right. All text in content zone with 48px left/right padding.
-- "editorial split": EXACTLY 2 columns — one image panel (left, 58% width) + one text panel (right, 42% width). The image panel is a single <div> with background-image: url(heroPath) covering the full left column. The text panel is a solid brand background color. Logo top of text panel (48px padding). Headline (44-56px bold) centered vertically in text panel. Subheadline (16-18px) below headline. CTA button near bottom of text panel. All text has 48px horizontal padding within the panel. NEVER create 3 columns. NEVER split the image into multiple panels.
+- "editorial split": Use this EXACT HTML structure, filling in the brand values:
+  <div style="width:100%;height:100%;display:flex;">
+    <div style="width:58%;height:100%;background-image:url(HERO_PATH);background-size:cover;background-position:center;"></div>
+    <div style="width:42%;height:100%;background:BRAND_BG_COLOR;display:flex;flex-direction:column;padding:40px 36px;box-sizing:border-box;">
+      <div style="flex-shrink:0;"><img src="__LOGO_DATA_URI__" style="max-height:36px;max-width:140px;object-fit:contain;"></div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:14px;">
+        <h1 style="margin:0;font-size:HEADLINE_SIZEpx;font-weight:700;line-height:1.1;color:HEADLINE_COLOR;font-family:HEADLINE_FONT;">HEADLINE_TEXT</h1>
+        <p style="margin:0;font-size:15px;line-height:1.5;color:BODY_COLOR;font-family:BODY_FONT;">SUBHEADLINE_TEXT</p>
+      </div>
+      <div style="flex-shrink:0;"><button style="width:100%;padding:14px 20px;background:BRAND_PRIMARY;color:#fff;border:none;border-radius:BORDER_RADIUS;font-size:15px;font-weight:600;cursor:pointer;font-family:BODY_FONT;">CTA_TEXT</button></div>
+    </div>
+  </div>
+  HEADLINE_SIZE: use 42px for portrait (tall canvas), 36px for square. BRAND_BG_COLOR: brand background (light cream, white, or dark). HEADLINE_COLOR: dark color from palette. BODY_COLOR: medium gray. BORDER_RADIUS: 6px for geometric brands, 24px for rounded brands. NEVER add extra divs, wrappers, or position:absolute elements.
 - "bold typographic": no hero photo. Brand color background (or white). Giant headline (72-96px) dominates center. Subheadline (20px) below. CTA button centered at bottom. Logo top-center or top-left.
 - "product showcase": product image prominent (center or right 50%). Copy panel on left or bottom with brand color background. Same text hierarchy as editorial split.
 - "quote card": large pull quote (48-64px) as the hero text, centered. Attribution or context below (16px). Brand color background or subtle image. Logo top.
@@ -357,114 +369,21 @@ export async function generateComposition(
   canvasWidth: number,
   canvasHeight: number,
   brief: CreativeBrief & { _fullBrief?: FullCreativeBrief },
-  critiqueIssues?: string[]
+  // critiqueIssues kept for API compatibility but no longer used
+  _critiqueIssues?: string[]
 ): Promise<string> {
-  const client = new Anthropic();
+  // ── Layout Zone Renderer ──────────────────────────────────────────────────
+  // Haiku extracts content tokens (copy, colors, fonts) as JSON.
+  // TypeScript assembles the HTML structure deterministically.
+  // This guarantees correct layout (no AI layout bugs) while keeping
+  // content generation fully AI-driven.
 
-  const retryContext = critiqueIssues && critiqueIssues.length > 0
-    ? `\n\nPREVIOUS ATTEMPT FAILED QUALITY REVIEW. Fix ALL of these issues:\n${critiqueIssues.map((i) => `- ${i}`).join("\n")}\n`
-    : "";
+  const { extractLayoutTokens, renderLayout } = await import("./layoutRenderer");
 
-  const ds = brandProfile.designSignal;
-  const designSignalContext = ds ? `
-BRAND DESIGN SIGNAL (from their actual website):
-- Layout pattern: ${ds.layoutPattern}
-- Visual weight: ${ds.visualWeight}
-- Card style: ${ds.cardStyle}
-- CTA style: ${ds.ctaStyle}
-- Dominant visual type: ${ds.dominantVisualType}
-- Photography treatment: ${ds.photographyTreatment}
-- Text overlay style: ${ds.textOverlayStyle}
-- Density: ${ds.density}
-- Art Director notes: ${ds.artDirectorNotes}` : "";
+  const tokens = await extractLayoutTokens(brief, brandProfile);
 
-  const headlineFontFamily = (brandProfile.typography?.headline as Record<string, string | undefined>)?.fontFamily ?? "Inter";
-  const headlineFontWeight = (brandProfile.typography?.headline as Record<string, string | undefined>)?.fontWeight ?? "700";
-  const bodyFontFamily = (brandProfile.typography?.body as Record<string, string | undefined>)?.fontFamily ?? "Inter";
-
-  // Use a placeholder for the logo data URI to avoid consuming output tokens
-  // The actual data URI will be injected after generation
-  const logoSection = logoDataUri
-    ? `Logo: available — use <img src="__LOGO_DATA_URI__" alt="logo" style="max-height:48px;max-width:160px;object-fit:contain;"> exactly as written`
-    : "No logo available — render the brand name as styled text instead";
-
-  const userPrompt = `Create a social media post as a complete HTML/CSS document.
-
-## CANVAS
-${canvasWidth}x${canvasHeight}px
-
-## CREATIVE BRIEF
-Layout style: ${brief.layoutStyle}
-Color theme: ${brief.colorTheme}
-Headline: "${brief.headline}"
-Subheadline: "${brief.subheadline}"
-Call to action: "${brief.callToAction}"
-${(brief.keyStats ?? []).length > 0 ? `Key stat: ${(brief.keyStats ?? [])[0]}` : ""}
-${brief.keyQuote ? `Quote: "${brief.keyQuote}"` : ""}
-
-## BRAND IDENTITY
-Brand name: ${brandProfile.meta?.brandName ?? "Unknown"}
-Primary color: ${brandProfile.primaryColor ?? "#333333"}
-Accent color: ${brandProfile.accentColor ?? "#666666"}
-Headline font: ${headlineFontFamily} (weight ${headlineFontWeight})
-Body font: ${bodyFontFamily}
-Shape language: ${brandProfile.shapeLanguage?.classification ?? "rounded"}
-Color palette:
-${(brandProfile.colorPalette ?? []).slice(0, 5).map((c) => `  ${c.hex}: ${c.contexts.slice(0, 2).join(", ")}`).join("\n")}
-${designSignalContext}
-
-## AVAILABLE IMAGES
-${segmented.backgroundPath ? `Background/hero image: ${segmented.backgroundPath}` : "No background image — use brand color background"}
-${segmented.subjectPath ? `Subject (transparent background, use as foreground overlay): ${segmented.subjectPath}` : ""}
-
-## LOGO
-${logoSection}
-${retryContext}
-
-Write the complete HTML document now. Use the exact copy from the creative brief. Make it stunning.`;
-
-  // Retry on connection errors (transient network failures)
-  async function callWithRetry(attempt = 1): Promise<Anthropic.Message> {
-    try {
-      return await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4000,
-        system: ART_DIRECTOR_SYSTEM,
-        messages: [{ role: "user", content: userPrompt }],
-      }) as Anthropic.Message;
-    } catch (err: unknown) {
-      const msg = (err as { message?: string }).message ?? "";
-      const isConnErr = msg.includes("Connection error") || msg.includes("ECONNRESET") || msg.includes("ETIMEDOUT") || msg.includes("fetch failed");
-      if (isConnErr && attempt < 3) {
-        const delay = attempt * 3000;
-        console.warn(`[Art Director] Connection error on attempt ${attempt}, retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
-        return callWithRetry(attempt + 1);
-      }
-      throw err;
-    }
-  }
-  const response = await callWithRetry();
-
-  const content = response.content[0];
-  if (content.type !== "text") throw new Error("Unexpected response type from Art Director");
-
-  let html = content.text.trim();
-
-  // Strip markdown code fences if present
-  html = html
-    .replace(/^```(?:html)?\s*/i, "")
-    .replace(/\s*```\s*$/i, "")
-    .trim();
-
-  if (!html.startsWith("<!DOCTYPE") && !html.startsWith("<html")) {
-    throw new Error(`Art Director returned invalid HTML (first 200 chars): ${html.slice(0, 200)}`);
-  }
-
-  // Inject the actual logo data URI (replacing the placeholder)
-  if (logoDataUri && html.includes("__LOGO_DATA_URI__")) {
-    html = html.replaceAll("__LOGO_DATA_URI__", logoDataUri);
-  }
+  const heroPath = segmented.backgroundPath || "";
+  const html = renderLayout(tokens, canvasWidth, canvasHeight, heroPath, logoDataUri);
 
   return html;
 }
