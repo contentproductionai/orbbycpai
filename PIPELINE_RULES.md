@@ -120,3 +120,23 @@ The platform aesthetic is light, warm backgrounds (e.g., `#FAF8F4` cream/off-whi
 - **No Scope Creep:** Never add features that weren't explicitly requested. Build the simplest version that works, then wait for approval.
 - **Diagnose Before Fixing:** When something fails, diagnose the root cause before attempting a fix. Never try more than one solution at a time.
 - **Verify Completion:** Always confirm what you built works before declaring a step complete.
+
+## 12. Subtext Design Rule — Legibility and Purpose
+
+### Rule
+Subtext on all generated images is subject to three hard constraints:
+
+1. **12-word cap.** Subtext must never exceed 12 words. Social posts are viewed at thumbnail size on phones. If it takes more than a glance to read, it is doing the wrong job.
+2. **Stat-reinforcing, not descriptive.** Subtext does not describe the product. It does one thing: reinforce the headline and/or the stat. For `split-stat` layouts, subtext names what the product is and echoes the stat's credibility (e.g. "Prebiotic soda with 9g of fiber. Zero compromise.").
+3. **Minimum 40px on a 1080px canvas.** WCAG AA requires 4.5:1 contrast ratio. On a 1080px canvas rendered to a phone screen, subtext must be set at no smaller than 40px in the HTML compositor. This is a hard requirement, not a design preference.
+
+### Why
+In the POC images, subtext was illegible on mobile for users with any degree of visual impairment. A senior designer solves this with hierarchy over volume: the headline persuades, the stat credentializes, the subtext names. Three jobs, three elements, nothing more.
+
+### Applied to layout_selector.py
+The `write_subtext()` function applies this rule automatically:
+- For `split-stat`: generates a stat-reinforcing line using the selected stat's value and label.
+- For other layouts: caps the hero subheadline at 12 words, or falls back to the top two key messages.
+
+### Applied to the compositor
+The HTML template for every layout must enforce `font-size: 40px` minimum for subtext on a 1080px canvas. No CSS default or relative sizing may produce a smaller result.
