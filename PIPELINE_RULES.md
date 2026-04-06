@@ -140,3 +140,48 @@ The `write_subtext()` function applies this rule automatically:
 
 ### Applied to the compositor
 The HTML template for every layout must enforce `font-size: 40px` minimum for subtext on a 1080px canvas. No CSS default or relative sizing may produce a smaller result.
+
+## 13. Data Model: Generation Key is Product URL, Not Brand
+
+### Rule
+The `generations` table uses `brand_url` as its primary input field. **This column name is wrong and must be migrated to `product_url`.** A generation record represents a single pipeline run against a specific URL input — which may be a product page, a homepage, or any other URL the user provides. It is not a brand-level record.
+
+### Why
+A brand with 50 SKUs should produce 50 generation records, each scoped to a specific product page URL. Naming the column `brand_url` implies brand-level scope and conflates brand identity with product-level content generation. The `brand_id` foreign key correctly links the generation to the brand entity; the generation itself is keyed to the input URL.
+
+### Migration Requirements
+When this migration runs:
+1. Rename `brand_url` → `product_url` in the `generations` table.
+2. **Audit all existing `brand_url` values that are homepages.** Do not silently rename them. For any row where `brand_url` is a homepage (e.g., `https://magicmind.com`), flag it in the record's `brand_profile._orb.inputType` as `"brand"`. For rows where a product URL is known, update the value.
+3. Update all code references: `DashboardClient.tsx`, `generate/route.ts`, `generations/route.ts`, `schema.ts`, `drizzle.config.ts`, and any seed scripts.
+4. This is a breaking schema change. Run it as a standalone migration with a rollback plan. Do not bundle it with other changes.
+
+### Status
+**Deferred.** Flagged 2026-04-06. Implement as a standalone migration in a future session.
+
+---
+
+## 14. URL Intent: Homepage vs. Product Page
+
+### Rule
+The URL the user inputs is their creative brief. The pipeline must detect and respect the intent of the URL:
+
+- **Homepage URL** (e.g., `https://magicmind.com`) → Generate brand awareness content. Scrape the homepage only. Do not crawl to product pages.
+- **Product URL** (e.g., `https://drinkolipop.com/products/vintage-cola`) → Generate product-specific content. Scrape that page only. Do not fall back to the homepage.
+
+No crawling. No inference. No mixing of homepage and product page data in a single generation run.
+
+### UI Requirement
+The generate form must display a single confirmation line below the URL input field **before** the user submits, showing detected intent:
+
+- For a homepage: `Generating brand content from homepage`
+- For a product page: `Generating product content for [product name]` (where product name is parsed from the URL slug or page title if available)
+
+This confirmation line is not optional. It is the user's only signal that the system understood their input correctly before a generation run starts.
+
+### Implementation Notes
+- Intent detection is URL-structure-based, not AI-based. A URL containing `/products/`, `/shop/`, `/item/`, `/p/`, or `/collections/[name]/products/` is a product URL. All others default to homepage/brand intent.
+- The confirmation line must update in real time as the user types, with no submit required.
+- The `brand_profile._orb.inputType` field must be set to `"product"` or `"brand"` on every generation record to preserve this distinction for calibration and analytics.
+
+---
