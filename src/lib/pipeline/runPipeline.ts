@@ -12,7 +12,7 @@ import { execSync } from "child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 import { classifyBrand, extractDesignSignal, type BrandProfile } from "./classifyBrand";
-import { classifyVisual } from "./classifyVisual";
+import { classifyVisual, quantizeImageColors } from "./classifyVisual";
 import type { EmitFn } from "./types";
 import { runCompositorPipeline, SIZE_DIMENSIONS } from "./runCompositor";
 
@@ -380,13 +380,50 @@ export async function runFullPipeline(
   // Step 1: DOM extraction (discovery only — no classification)
   const raw = await extractDom(url, workDir, emit);
 
-  // Step 1b: Visual classification — Claude Vision classifies scoredPalette colors
+  // Step 1b: Product image color quantization — extract dominant colors from the
+  // hero asset (if downloaded) and merge into the DOM palette before classification.
+  // This captures accent colors that live on product packaging but not in site CSS
+  // (e.g. Liquid Death gold band, OLIPOP orange, BRUNT orange).
+  const domPalette = (raw.scoredPalette as Array<{ hex: string; score: number; sources: string[]; totalArea?: number }>) ?? [];
+  let enrichedPalette = domPalette;
+  try {
+    const downloadedAssets = (raw.downloadedAssets as Array<{ localPath: string; inHero: boolean; width: number; height: number }>) ?? [];
+    // Prefer hero assets; fall back to the largest downloaded asset
+    const heroAsset = downloadedAssets.find((a) => a.inHero) ?? downloadedAssets[0];
+    if (heroAsset?.localPath && fs.existsSync(heroAsset.localPath)) {
+      console.log(`[pipeline] Running color quantization on hero asset: ${heroAsset.localPath}`);
+      const quantizedColors = await quantizeImageColors(heroAsset.localPath, 3);
+      if (quantizedColors.length > 0) {
+        console.log(`[pipeline] Quantized ${quantizedColors.length} colors from hero asset:`, quantizedColors.map((c) => c.hex));
+        // Merge: add quantized colors that aren't already close to a DOM palette entry
+        // "Close" = within 30 units of Euclidean RGB distance
+        const isAlreadyInPalette = (hex: string): boolean => {
+          const toRgb = (h: string): [number, number, number] => {
+            const n = parseInt(h.replace("#", ""), 16);
+            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+          };
+          const [r1, g1, b1] = toRgb(hex);
+          return domPalette.some((c) => {
+            const [r2, g2, b2] = toRgb(c.hex);
+            return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2) < 30;
+          });
+        };
+        const newColors = quantizedColors.filter((c) => !isAlreadyInPalette(c.hex));
+        enrichedPalette = [...domPalette, ...newColors];
+        console.log(`[pipeline] Added ${newColors.length} new colors from quantization to palette`);
+      }
+    }
+  } catch (e) {
+    console.warn("[pipeline] Color quantization pass failed (non-fatal):", (e as Error).message);
+  }
+
+  // Step 1c: Visual classification — Claude Vision classifies scoredPalette colors
   // and discoveredFonts by semantic role (primary/secondary/accent/structural, heading/body/ui)
   emit({ type: "status", step: 2, total: 5, message: "Classifying brand colors and fonts..." });
   console.log("[pipeline] Starting classifyVisual...");
   const visualClassification = await classifyVisual(
     (raw.viewportScreenshotPath as string) ?? "",
-    (raw.scoredPalette as Array<{ hex: string; score: number; sources: string[]; totalArea?: number }>) ?? [],
+    enrichedPalette,
     (raw.discoveredFonts as Array<{ family: string; seenOn: string[]; score?: number }>) ?? [],
     (raw.fontElementMap as Record<string, string | null>) ?? {}
   );

@@ -35,6 +35,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
 import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
+import sharp from "sharp";
 
 export interface ScoredColor {
   hex: string;
@@ -68,6 +69,83 @@ export interface VisualClassification {
   uiFont: string | null;
 }
 
+// ─── Product image color quantization ────────────────────────────────────────
+
+/**
+ * Extracts the top N dominant colors from a local image file using sharp.
+ * Resizes to a small thumbnail first for speed, then samples pixel clusters.
+ *
+ * Returns colors as ScoredColor entries with source "image:quantize" so they
+ * can be merged into the DOM palette before classification. These entries
+ * capture accent colors that live on product packaging but not in site CSS
+ * (e.g. the Liquid Death gold band, the OLIPOP orange, the BRUNT orange).
+ *
+ * Filters out near-white and near-black from quantization results ONLY when
+ * the DOM palette already has a dominant background color — we don't want
+ * packaging shadows or white backgrounds to override the site's actual field color.
+ */
+export async function quantizeImageColors(
+  imagePath: string,
+  topN: number = 3
+): Promise<ScoredColor[]> {
+  try {
+    // Resize to 50×50 for fast sampling — enough color diversity, not too much noise
+    const { data, info } = await sharp(imagePath)
+      .resize(50, 50, { fit: "fill" })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    // Build a color frequency map using 4-bit quantization (16 levels per channel)
+    // This groups similar colors together rather than treating each pixel as unique
+    // Clamp to 240 max to prevent Math.round(255/16)*16 = 256 overflow in hex formatting
+    const freq: Map<string, { r: number; g: number; b: number; count: number }> = new Map();
+    for (let i = 0; i < data.length; i += 3) {
+      const r = Math.min(Math.round(data[i] / 16) * 16, 240);
+      const g = Math.min(Math.round(data[i + 1] / 16) * 16, 240);
+      const b = Math.min(Math.round(data[i + 2] / 16) * 16, 240);
+      const key = `${r},${g},${b}`;
+      const existing = freq.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        freq.set(key, { r, g, b, count: 1 });
+      }
+    }
+
+    const totalPixels = info.width * info.height;
+
+    // Sort by frequency, convert to hex, filter out near-white/near-black
+    // (those are packaging backgrounds/shadows, not brand accent colors)
+    const sorted = Array.from(freq.values())
+      .sort((a, b) => b.count - a.count)
+      .filter(({ r, g, b, count }) => {
+        // Skip colors that cover less than 2% of the image (noise)
+        if (count / totalPixels < 0.02) return false;
+        // Skip near-white (all channels > 220)
+        if (r > 220 && g > 220 && b > 220) return false;
+        // Skip near-black (all channels < 35)
+        if (r < 35 && g < 35 && b < 35) return false;
+        return true;
+      });
+
+    return sorted.slice(0, topN).map((c, i) => {
+      const hex = `#${c.r.toString(16).padStart(2, "0")}${c.g.toString(16).padStart(2, "0")}${c.b.toString(16).padStart(2, "0")}`;
+      return {
+        hex,
+        // Score them below typical DOM scores (which reach 50-100) but above noise
+        // First color gets score 25, second 20, third 15
+        score: 25 - i * 5,
+        sources: ["image:quantize"],
+        totalArea: c.count / totalPixels,
+      };
+    });
+  } catch (e) {
+    console.warn("[quantizeImageColors] Failed:", (e as Error).message);
+    return [];
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function hexToRgb(hex: string): [number, number, number] | null {
@@ -87,7 +165,14 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** Returns true if a color is effectively white, black, or near-neutral gray */
+/** Returns true if a color is effectively white, black, or near-neutral gray.
+ *
+ * IMPORTANT: This function does NOT determine whether a color should be kept
+ * in the brand palette. It is only used by isThinPalette() to detect when the
+ * DOM scanner failed to capture any brand colors at all. Dominant colors —
+ * including #000000 and #ffffff — are ALWAYS retained in the palette and passed
+ * to Claude for classification. The classifier decides their semantic role.
+ */
 function isNeutral(hex: string): boolean {
   const rgb = hexToRgb(hex);
   if (!rgb) return true;
@@ -106,11 +191,29 @@ function isNeutral(hex: string): boolean {
  * Returns true when the DOM palette is too thin to be reliable:
  * - Fewer than 4 colors, OR
  * - All top-3 colors are neutral (white/black/gray)
+ *
+ * DOMINANT COLOR EXCEPTION: A color is never considered neutral for the purpose
+ * of this check if it is a non-neutral color (has actual brand hue) AND its
+ * totalArea exceeds the combined totalArea of all other palette entries.
+ *
+ * This correctly handles brands like Liquid Death and BRUNT where #000000 is the
+ * primary background. Black is technically neutral, but when it's dominant AND
+ * the palette also contains non-neutral accent colors (pink, orange, gold), the
+ * palette is NOT thin — the brand just uses black as its field color.
+ *
+ * A palette of all-neutrals (white + black + gray) IS thin even if white is dominant.
+ *
+ * Note: totalArea values are raw pixel units (width × height), not normalized.
  */
 function isThinPalette(palette: ScoredColor[]): boolean {
   if (palette.length < 4) return true;
-  const top3 = palette.slice(0, 3);
-  return top3.every((c) => isNeutral(c.hex));
+  // If any color in the palette is non-neutral, the palette has brand color signal
+  // and should NOT trigger the thin-palette escape hatch
+  const hasNonNeutralColor = palette.some((c) => !isNeutral(c.hex));
+  if (hasNonNeutralColor) return false;
+  // All colors are neutral — check if any neutral is dominant (covers more area than all others)
+  // A dominant neutral still means the palette is thin — it just means the site is monochromatic
+  return true;
 }
 
 // ─── Screenshot-only color sampling (thin palette escape hatch) ───────────────
@@ -333,8 +436,14 @@ For each color in scoredPalette, assign exactly one role:
 Rules:
 - Every color must get exactly one role.
 - Only one color should be "primary".
-- White and black are almost always "structural" unless the site is monochromatic.
-- Use the screenshot to break ties — the most visually dominant non-neutral color is "primary".
+- White and black are "structural" ONLY when they appear as text color or minor UI elements.
+- CRITICAL EXCEPTION: If black (#000000 or near-black) is the dominant background color covering
+  most of the page, it MUST be classified as "primary" — not structural. Brands like Liquid Death,
+  BRUNT, and Magic Mind use black as their primary brand color. Classifying it as structural
+  destroys the brand identity.
+- Same rule applies to white: if white is the dominant background covering most of the page,
+  classify it as "primary" (e.g. OLIPOP, Poppi use light backgrounds as their primary field).
+- Use the screenshot to break ties — the color covering the most visual area is "primary".
 - Colors with source "screenshot:visual-sampling" were recovered directly
   from the screenshot — treat them as high-confidence brand colors.
 
