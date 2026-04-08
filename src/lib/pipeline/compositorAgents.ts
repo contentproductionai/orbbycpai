@@ -360,10 +360,11 @@ export async function generateImageDirection(
   const client = new Anthropic();
 
   // Build a list of available brand images for the agent to choose from
-  const brandImages = (brandProfile.brandAssets?.downloadedAssets ?? []).slice(0, 10);
-  const brandImageList = brandImages.length > 0
-    ? brandImages.map((img, i) => `  [${i}] ${img.alt || "(no alt)"} — ${img.src.slice(0, 80)} (${img.width}x${img.height})`).join("\n")
-    : "  (none available)";
+  // Use the ranked assets if available, otherwise fall back to downloaded assets
+  const rankedAssets = brandProfile.brandAssets?.rankedAssets;
+  const brandImageList = rankedAssets && rankedAssets.length > 0
+    ? rankedAssets.map((r) => `  [${r.index}] ${r.alt || "(no alt)"} — ${r.src.slice(0, 80)} (${r.width}x${r.height}) | Vision Score: ${r.totalScore}/10 | Reason: ${r.heroReason}`).join("\n")
+    : (brandProfile.brandAssets?.downloadedAssets ?? []).slice(0, 10).map((img, i) => `  [${i}] ${img.alt || "(no alt)"} — ${img.src.slice(0, 80)} (${img.width}x${img.height})`).join("\n") || "  (none available)";
 
   const payload = `CREATIVE BRIEF:
   Brand: ${brandProfile.meta?.brandName ?? "Unknown"}
@@ -395,6 +396,7 @@ Rules:
 - For DTC/lifestyle brands: prefer brand images if they show the product in use
 - NEVER use a brand image that has text already on it
 - NEVER use a brand image that is a UI screenshot or product mockup (for non-software brands)
+- If Vision Scores are provided, strongly prefer the image with the highest score unless the visual concept explicitly requires a different scene
 
 Output JSON:
 {

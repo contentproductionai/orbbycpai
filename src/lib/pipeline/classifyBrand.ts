@@ -6,6 +6,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import * as fs from "fs";
+import { rankHeroAssets, RankedAsset } from "./rankHeroAssets";
 const CLASSIFICATION_MODEL = "claude-haiku-4-5-20251001";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -108,6 +109,8 @@ export interface BrandProfile {
       isGif: boolean;
       inHero: boolean;
     }>;
+    rankedAssets?: RankedAsset[];
+    heroAssetIndex?: number;
   };
   photography: {
     style: string;
@@ -654,6 +657,10 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
     inHero: boolean;
   }>) ?? [];
 
+  // Rank the downloaded assets using Claude Vision to find the best hero image
+  console.log("[classifyBrand] Ranking brand assets...");
+  const { rankedAssets, heroAssetIndex } = await rankHeroAssets(downloadedAssets);
+
   return {
     meta: {
       url: raw.url as string,
@@ -718,6 +725,8 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
       favicon: (raw.favicon as string) ?? "",
       ogImage: (raw.ogImage as string) ?? "",
       downloadedAssets,
+      rankedAssets,
+      heroAssetIndex,
     },
     photography: {
       style: llmData.photographyStyle,
