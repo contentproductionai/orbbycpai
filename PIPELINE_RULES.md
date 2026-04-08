@@ -185,3 +185,39 @@ This confirmation line is not optional. It is the user's only signal that the sy
 - The `brand_profile._orb.inputType` field must be set to `"product"` or `"brand"` on every generation record to preserve this distinction for calibration and analytics.
 
 ---
+## 15. Asset Ranking: Claude Vision Hero Image Selection
+
+### Rule
+After downloading candidate brand assets, run a single Claude Vision batch call to rank them before the Image Director agent runs. This ensures the Image Director receives visual quality scores, not just text metadata.
+
+### Implementation
+- `rankHeroAssets()` in `src/lib/pipeline/rankHeroAssets.ts`
+- Filters candidates: width ≥ 300px, height ≥ 300px, not GIF, file exists locally
+- Sorts candidates: inHero first, then by pixel area (largest first)
+- Takes top 10 candidates, sends all in a single Claude Vision call (claude-haiku-4-5-20251001)
+- Scores each on three criteria:
+  - **Product Visibility** (0–3): Is the product clearly visible and the main subject?
+  - **Background Cleanliness** (0–3): Is the background solid/clean/transparent?
+  - **Hero Usability** (0–4): How well would this work as the main visual anchor in a social post?
+- Returns `rankedAssets[]` (sorted by totalScore desc) and `heroAssetIndex` (index into original downloadedAssets)
+- Both are stored on `brandProfile.brandAssets`
+
+### Image Director Integration
+- `compositorAgents.ts` Image Director receives Vision Scores and heroReason for each candidate
+- Instruction added: "If Vision Scores are provided, strongly prefer the image with the highest score unless the visual concept explicitly requires a different scene"
+
+### Color Quantization Integration
+- `runPipeline.ts` color quantization pass now reads `heroAssetIndex` from the ranked result
+- Falls back to `inHero` flag, then first asset if ranking is unavailable
+
+### Fallback
+- Non-fatal: if ranking fails, falls back to inHero[0] as before
+- One batch call per generation run — not per post
+
+### Rationale
+The Image Director was previously guessing from alt text and URL patterns. For DTC brands (Liquid Death, OLIPOP, Poppi), the product image is the largest, squarest, most prominently placed asset — but alt text is often empty. Vision scoring eliminates the guesswork and ensures the correct hero asset is selected.
+
+### Committed
+`abedf3f` (rankHeroAssets + classifyBrand + compositorAgents), `6e57146` (runPipeline color quantization)
+
+---
