@@ -388,8 +388,12 @@ export async function runFullPipeline(
   let enrichedPalette = domPalette;
   try {
     const downloadedAssets = (raw.downloadedAssets as Array<{ localPath: string; inHero: boolean; width: number; height: number }>) ?? [];
-    // Prefer hero assets; fall back to the largest downloaded asset
-    const heroAsset = downloadedAssets.find((a) => a.inHero) ?? downloadedAssets[0];
+    // Prefer ranked hero asset (set by rankHeroAssets Vision pass in classifyBrand);
+    // fall back to inHero flag, then first asset
+    const rankedHeroIndex = (raw.heroAssetIndex as number | undefined);
+    const heroAsset = (rankedHeroIndex !== undefined ? downloadedAssets[rankedHeroIndex] : undefined)
+      ?? downloadedAssets.find((a) => a.inHero)
+      ?? downloadedAssets[0];
     if (heroAsset?.localPath && fs.existsSync(heroAsset.localPath)) {
       console.log(`[pipeline] Running color quantization on hero asset: ${heroAsset.localPath}`);
       const quantizedColors = await quantizeImageColors(heroAsset.localPath, 3);
