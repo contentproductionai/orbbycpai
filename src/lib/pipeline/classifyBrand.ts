@@ -657,9 +657,10 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
     inHero: boolean;
   }>) ?? [];
 
-  // Rank the downloaded assets using Claude Vision to find the best hero image
-  console.log("[classifyBrand] Ranking brand assets...");
-  const { rankedAssets, heroAssetIndex } = await rankHeroAssets(downloadedAssets);
+  // Use pre-computed ranking from runPipeline (passed via raw.rankedAssets / raw.heroAssetIndex)
+  // rankHeroAssets runs in runPipeline before color quantization so both passes use the same hero
+  const rankedAssets = (raw.rankedAssets as RankedAsset[] | undefined) ?? [];
+  const heroAssetIndex = (raw.heroAssetIndex as number | undefined) ?? 0;
 
   return {
     meta: {

@@ -12,6 +12,7 @@ import { execSync } from "child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "@/lib/utils/anthropicRetry";
 import { classifyBrand, extractDesignSignal, type BrandProfile } from "./classifyBrand";
+import { rankHeroAssets } from "./rankHeroAssets";
 import { classifyVisual, quantizeImageColors } from "./classifyVisual";
 import type { EmitFn } from "./types";
 import { runCompositorPipeline, SIZE_DIMENSIONS } from "./runCompositor";
@@ -380,18 +381,31 @@ export async function runFullPipeline(
   // Step 1: DOM extraction (discovery only — no classification)
   const raw = await extractDom(url, workDir, emit);
 
-  // Step 1b: Product image color quantization — extract dominant colors from the
-  // hero asset (if downloaded) and merge into the DOM palette before classification.
+  // Step 1b: Asset ranking — Claude Vision batch-scores downloaded images to find the best hero.
+  // Runs here (before color quantization) so both passes use the same ranked hero asset.
+  emit({ type: "status", step: 2, total: 6, message: "Ranking brand assets..." });
+  const downloadedAssetsForRanking = (raw.downloadedAssets as Array<{
+    src: string; localPath: string; localUrl: string;
+    alt: string; width: number; height: number; ext: string; isGif: boolean; inHero: boolean;
+  }>) ?? [];
+  let assetRanking = { rankedAssets: [] as ReturnType<typeof Array.prototype.slice>, heroAssetIndex: 0 };
+  try {
+    assetRanking = await rankHeroAssets(downloadedAssetsForRanking);
+    console.log(`[pipeline] Asset ranking complete. Hero index: ${assetRanking.heroAssetIndex}`);
+  } catch (e) {
+    console.warn("[pipeline] Asset ranking failed (non-fatal):", (e as Error).message);
+  }
+
+  // Step 1c: Product image color quantization — extract dominant colors from the
+  // ranked hero asset and merge into the DOM palette before classification.
   // This captures accent colors that live on product packaging but not in site CSS
   // (e.g. Liquid Death gold band, OLIPOP orange, BRUNT orange).
   const domPalette = (raw.scoredPalette as Array<{ hex: string; score: number; sources: string[]; totalArea?: number }>) ?? [];
   let enrichedPalette = domPalette;
   try {
-    const downloadedAssets = (raw.downloadedAssets as Array<{ localPath: string; inHero: boolean; width: number; height: number }>) ?? [];
-    // Prefer ranked hero asset (set by rankHeroAssets Vision pass in classifyBrand);
-    // fall back to inHero flag, then first asset
-    const rankedHeroIndex = (raw.heroAssetIndex as number | undefined);
-    const heroAsset = (rankedHeroIndex !== undefined ? downloadedAssets[rankedHeroIndex] : undefined)
+    const downloadedAssets = downloadedAssetsForRanking;
+    // Use ranked hero asset — falls back to inHero flag, then first asset
+    const heroAsset = (assetRanking.heroAssetIndex !== undefined ? downloadedAssets[assetRanking.heroAssetIndex] : undefined)
       ?? downloadedAssets.find((a) => a.inHero)
       ?? downloadedAssets[0];
     if (heroAsset?.localPath && fs.existsSync(heroAsset.localPath)) {
@@ -443,8 +457,8 @@ export async function runFullPipeline(
     JSON.stringify(visualClassification, null, 2)
   );
 
-  // Merge visual classification into raw DOM data so classifyBrand receives
-  // pre-classified colors and fonts — it no longer needs to infer them
+  // Merge visual classification + asset ranking into raw DOM data so classifyBrand receives
+  // pre-classified colors, fonts, and the ranked hero asset index
   const rawWithClassification = {
     ...raw,
     brandPrimary: visualClassification.brandPrimary,
@@ -455,6 +469,8 @@ export async function runFullPipeline(
     uiFont: visualClassification.uiFont,
     classifiedColors: visualClassification.colors,
     classifiedFonts: visualClassification.fonts,
+    rankedAssets: assetRanking.rankedAssets,
+    heroAssetIndex: assetRanking.heroAssetIndex,
   };
 
   // Step 2: Brand classification (tone, personality, industry, photography — NOT colors/fonts)
