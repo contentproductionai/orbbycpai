@@ -7,7 +7,6 @@ import BrandExtractionPanel from "@/components/BrandExtractionPanel";
 export default function HomePage() {
   return (
     <main style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-
       {/* ── Nav ── */}
       <nav style={{ borderBottom: "1px solid var(--border-subtle)", background: "rgba(8,8,8,0.85)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -35,179 +34,118 @@ export default function HomePage() {
         textAlign: "center",
         overflow: "hidden",
       }}>
-        {/* Starfield + orb – fills section, sits behind text */}
         <UfoHero />
-
-        {/* Text + panel – above the orb layer */}
         <div style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", maxWidth: 760, width: "100%" }}>
-
           {/* Badge */}
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 28 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)" }} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-Native Content Production</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-Powered Brand Intelligence</span>
           </div>
 
-          {/* H1 – original clamp size restored */}
+          {/* H1 */}
           <h1 style={{ margin: "0 0 18px", padding: 0, lineHeight: 1.05, letterSpacing: "-0.03em" }}>
             <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "#ffffff" }}>
-              Your brand.
+              Reverse-engineer
             </span>
             <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "#00d4aa" }}>
-              Every platform.
+              any brand.
             </span>
             <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "rgba(255,255,255,0.28)" }}>
-              60 seconds.
+              From a URL.
             </span>
           </h1>
 
           {/* Subheadline */}
           <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 36 }}>
-            Drop your URL. Orb extracts your brand DNA and generates 40 scroll-stopping posts sized perfectly for every platform.
+            Drop any URL. Orb extracts brand DNA — colors, fonts, tone, archetype — and shows you how GPT, Claude, and Gemini perceive it. Understand your brand. Outposition your competitors.
           </p>
 
-          {/* Brand extraction panel */}
+          {/* Live demo panel */}
           <BrandExtractionPanel />
-
-          <p style={{ marginTop: 16, fontSize: 12, color: "var(--text-tertiary)" }}>3 free generations · No credit card required</p>
         </div>
       </section>
 
-      {/* ── Feature grid ── */}
+      {/* ── What you get ── */}
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <h2 style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8 }}>
+            Everything you need to know about a brand
+          </h2>
+          <p style={{ fontSize: 15, color: "var(--text-secondary)", maxWidth: 480, margin: "0 auto" }}>
+            One URL. A complete intelligence report in under 60 seconds.
+          </p>
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-          {([
+          {[
             {
-              icon: (
-                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* UFO saucer body */}
-                  <ellipse cx="26" cy="27" rx="12" ry="4" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* UFO dome */}
-                  <path d="M20 27 Q20 21 26 21 Q32 21 32 27" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* UFO ring/orbit */}
-                  <ellipse cx="26" cy="27" rx="16" ry="5.5" stroke="#00d4aa" strokeWidth="1" fill="none" opacity="0.5"/>
-                  {/* Beam */}
-                  <path d="M22 31 L19 38 M30 31 L33 38" stroke="#00d4aa" strokeWidth="1" opacity="0.4"/>
-                  <line x1="19" y1="38" x2="33" y2="38" stroke="#00d4aa" strokeWidth="1" opacity="0.3"/>
-                </svg>
-              ),
-              title: "Brand Extraction",
-              body: "Paste any URL and Orb reverse-engineers your visual identity – colors, typography, shape language, and tone of voice – automatically, in seconds.",
-              pills: ["Color palettes", "Font matching", "Tone of voice", "Logo detection"],
+              icon: "◈",
+              title: "Visual Identity",
+              body: "Full color palette with hex codes, typography stack, shape language, and spatial philosophy — extracted directly from the live site.",
             },
             {
-              icon: (
-                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* Triangle/prism – 3D effect with inner lines */}
-                  <polygon points="26,14 38,36 14,36" stroke="#00d4aa" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
-                  {/* Inner prism lines */}
-                  <line x1="26" y1="14" x2="26" y2="36" stroke="#00d4aa" strokeWidth="1" opacity="0.5"/>
-                  <line x1="26" y1="36" x2="32" y2="25" stroke="#00d4aa" strokeWidth="1" opacity="0.5"/>
-                  <line x1="26" y1="36" x2="20" y2="25" stroke="#00d4aa" strokeWidth="1" opacity="0.5"/>
-                </svg>
-              ),
-              title: "40 Posts Per Generation",
-              body: "10 unique design concepts, each rendered across Instagram, Facebook, LinkedIn, and X – every dimension, every crop, every format. One click.",
-              pills: ["Instagram 1:1 & 9:16", "LinkedIn banners", "Facebook covers", "X cards"],
+              icon: "✦",
+              title: "Brand Archetype",
+              body: "Classified against all 12 Jungian archetypes with a rationale. Understand the psychological positioning behind the brand.",
             },
             {
-              icon: (
-                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* Pill/capsule – rotated ~35deg */}
-                  <rect x="18" y="22" width="20" height="10" rx="5" stroke="#00d4aa" strokeWidth="1.5" fill="none" transform="rotate(-35 26 27)"/>
-                  {/* Small circle detail inside pill */}
-                  <circle cx="22" cy="30" r="2.5" stroke="#00d4aa" strokeWidth="1" fill="none" transform="rotate(-35 26 27)"/>
-                </svg>
-              ),
-              title: "Chat-Based Editing",
-              body: "Skip the design tool. Just describe the change – 'make the background darker,' 'swap the photo,' 'try a warmer palette' – and Orb refines in real time.",
-              pills: ["Natural language edits", "Instant preview", "Version history"],
+              icon: "⬡",
+              title: "AI Brand Perception",
+              body: "See how GPT-5, Claude, and Gemini describe the brand based on their training data. A proxy for real-world brand equity.",
             },
             {
-              icon: (
-                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* Chevron – downward pointing V */}
-                  <polyline points="16,20 26,32 36,20" stroke="#00d4aa" strokeWidth="2" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
-                  {/* Second inner chevron for depth */}
-                  <polyline points="19,20 26,29 33,20" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinejoin="round" strokeLinecap="round" opacity="0.45"/>
-                </svg>
-              ),
-              title: "Built for Performance",
-              body: "Every post is optimized for the algorithm – platform-native ratios, high-contrast visuals, and copy length calibrated for engagement. What looks great also converts.",
-              pills: ["Contrast optimized", "Platform-native sizing", "Engagement-tuned copy", "Instant download"],
+              icon: "◇",
+              title: "Product Intelligence",
+              body: "Business model, pricing, target customer, key features, and primary CTA — everything a competitive analyst needs.",
             },
             {
-              icon: (
-                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* Orb/eye – outer ring + inner circle + pupil dot */}
-                  <circle cx="26" cy="26" r="11" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  <circle cx="26" cy="26" r="6" stroke="#00d4aa" strokeWidth="1.2" fill="none"/>
-                  {/* Pupil/highlight dot */}
-                  <circle cx="28.5" cy="23.5" r="1.8" fill="#00d4aa" opacity="0.9"/>
-                </svg>
-              ),
-              title: "Generation History",
-              body: "Every set you generate is saved to your account – organized by brand, browsable anytime, and re-downloadable in one click. Nothing gets lost.",
-              pills: ["Saved to account", "Organized by brand", "Re-downloadable"],
+              icon: "⊕",
+              title: "Competitor Comparison",
+              body: "Run up to 3 competitors side-by-side. See where you win, where you're exposed, and get AI-generated USP statements.",
             },
             {
-              icon: (
-                <svg width="26" height="26" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="26" cy="26" r="24" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* Jellyfish – dome bell */}
-                  <path d="M16 26 Q16 17 26 17 Q36 17 36 26" stroke="#00d4aa" strokeWidth="1.5" fill="none"/>
-                  {/* Bell bottom wavy edge */}
-                  <path d="M16 26 Q18 28 20 26 Q22 24 24 26 Q26 28 28 26 Q30 24 32 26 Q34 28 36 26" stroke="#00d4aa" strokeWidth="1.2" fill="none"/>
-                  {/* Tentacles */}
-                  <path d="M19 27 Q18 31 19 35" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
-                  <path d="M22 27 Q21 32 22 36" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
-                  <path d="M26 27 Q26 32 26 37" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
-                  <path d="M30 27 Q31 32 30 36" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
-                  <path d="M33 27 Q34 31 33 35" stroke="#00d4aa" strokeWidth="1" fill="none" strokeLinecap="round"/>
-                </svg>
-              ),
-              title: "Multi-Brand Profiles",
-              body: "Managing more than one brand? Save unlimited brand profiles and switch between them instantly. Each one remembers its own colors, fonts, and tone.",
-              pills: ["Unlimited profiles", "Instant switching", "Per-brand memory"],
+              icon: "≡",
+              title: "Tone of Voice",
+              body: "Directness, formality, emotionality — classified and summarized so you know exactly how a brand communicates.",
             },
-          ] as { icon: React.ReactNode; title: string; body: string; pills: string[] }[]).map((f) => (
-            <div key={f.title} className="surface" style={{ padding: 24, display: "flex", flexDirection: "column" }}>
-              <div style={{ marginBottom: 14 }}>{f.icon}</div>
+          ].map((f) => (
+            <div key={f.title} className="surface" style={{ padding: 28 }}>
+              <div style={{ fontSize: 24, color: "var(--brand-primary)", marginBottom: 14 }}>{f.icon}</div>
               <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8, letterSpacing: "-0.01em" }}>{f.title}</h3>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{f.body}</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {f.pills.map((pill) => (
-                  <span key={pill} style={{
-                    fontSize: 11,
-                    fontWeight: 500,
-                    color: "rgba(0,212,170,0.85)",
-                    background: "rgba(0,212,170,0.08)",
-                    border: "1px solid rgba(0,212,170,0.18)",
-                    borderRadius: 100,
-                    padding: "3px 10px",
-                    letterSpacing: "0.01em",
-                    whiteSpace: "nowrap" as const,
-                  }}>{pill}</span>
-                ))}
-              </div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.65, margin: 0 }}>{f.body}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── How It Works ── */}
-      <section id="how-it-works" style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
-        <h2 style={{ fontSize: "clamp(26px, 3.5vw, 38px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8, textAlign: "center" }}>How it works</h2>
-        <p style={{ fontSize: 15, color: "var(--text-secondary)", textAlign: "center", marginBottom: 48 }}>Three steps. Sixty seconds.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, maxWidth: 900, margin: "0 auto" }}>
+      {/* ── How it works ── */}
+      <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <h2 style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8 }}>
+            How it works
+          </h2>
+          <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>Two steps. No setup required.</p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
           {[
-            { step: "01", icon: "⬡", title: "Signal", body: "Drop your URL. Orb extracts your brand DNA – colors, type, tone, and shape language – in seconds." },
-            { step: "02", icon: "◎", title: "Generate", body: "10 designs × 4 platforms = 40 images in 60 seconds. Every format, every size, every time." },
-            { step: "03", icon: "◈", title: "Refine & Download", body: "Chat to adjust anything. Make the background darker. Swap the photo. Download instantly – no ZIP files." },
+            {
+              step: "01",
+              icon: "⊕",
+              title: "Drop a URL",
+              body: "Paste any brand website — yours, a competitor, or a brand you admire. Orb scrapes the live site, not cached data.",
+            },
+            {
+              step: "02",
+              icon: "◈",
+              title: "AI extracts the brand",
+              body: "Claude analyzes the DOM to extract visual tokens, tone, archetype, and positioning. Then GPT, Claude, and Gemini each weigh in on brand perception.",
+            },
+            {
+              step: "03",
+              icon: "✦",
+              title: "Get your intelligence report",
+              body: "A full brand report card — plus competitor comparison and AI-generated USP statements — ready to act on.",
+            },
           ].map((s) => (
             <div key={s.step} className="surface" style={{ padding: 28, position: "relative" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--brand-primary)", letterSpacing: "0.1em", marginBottom: 16, opacity: 0.7 }}>STEP {s.step}</div>
@@ -219,15 +157,57 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Use cases ── */}
+      <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <h2 style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8 }}>
+            Built for people who think about brands
+          </h2>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+          {[
+            { role: "Founders", use: "Understand your own brand positioning before a board meeting or investor pitch." },
+            { role: "CMOs", use: "Audit a competitor's brand in minutes. Know their archetype, tone, and how AI perceives them." },
+            { role: "Agencies", use: "Walk into a new client meeting with a full brand audit already done. Impress before you pitch." },
+            { role: "Investors", use: "Quickly assess brand strength and positioning as part of due diligence." },
+          ].map((u) => (
+            <div key={u.role} style={{
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              borderRadius: 12,
+              padding: "20px 22px",
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--brand-primary)", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 8 }}>{u.role}</div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.65, margin: 0 }}>{u.use}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ── Pricing ── */}
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
         <h2 style={{ fontSize: "clamp(26px, 3.5vw, 38px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8, textAlign: "center" }}>Simple pricing</h2>
         <p style={{ fontSize: 15, color: "var(--text-secondary)", textAlign: "center", marginBottom: 40 }}>Start free. Scale when you&apos;re ready.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, maxWidth: 900, margin: "0 auto" }}>
           {[
-            { name: "Starter", price: "$49", features: ["10 generations/mo", "All 4 platforms", "Instant download", "Generation history"], highlight: false },
-            { name: "Growth", price: "$99", features: ["25 generations/mo", "All 4 platforms", "Instant download", "Chat editing", "Priority support"], highlight: true },
-            { name: "Pro", price: "$199", features: ["75 generations/mo", "All 4 platforms", "Instant download", "Chat editing", "API access", "Dedicated support"], highlight: false },
+            {
+              name: "Starter",
+              price: "$29",
+              features: ["10 brand analyses/mo", "Full brand report", "AI perception (3 models)", "Competitor comparison", "Export to PDF"],
+              highlight: false,
+            },
+            {
+              name: "Growth",
+              price: "$79",
+              features: ["50 brand analyses/mo", "Full brand report", "AI perception (3 models)", "Competitor comparison", "Export to PDF", "Analysis history", "Priority support"],
+              highlight: true,
+            },
+            {
+              name: "Pro",
+              price: "$149",
+              features: ["Unlimited analyses", "Full brand report", "AI perception (3 models)", "Competitor comparison", "Export to PDF", "Analysis history", "API access", "Dedicated support"],
+              highlight: false,
+            },
           ].map((plan) => (
             <div
               key={plan.name}
@@ -274,6 +254,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Footer ── */}
       <footer style={{ borderTop: "1px solid var(--border-subtle)", padding: 24, textAlign: "center" }}>
         <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>© 2026 Orb · contentproduction.ai</p>
       </footer>

@@ -17,7 +17,7 @@ export default async function DashboardPage() {
       .from(generations)
       .where(eq(generations.userId, userId))
       .orderBy(desc(generations.createdAt))
-      .limit(20),
+      .limit(50),
     db
       .select()
       .from(subscriptions)
@@ -26,16 +26,7 @@ export default async function DashboardPage() {
   ]);
 
   const subscription = userSubscription[0] ?? null;
-
-  const totalGenerations = userGenerations.length;
   const completedRuns = userGenerations.filter((g) => g.status === "complete").length;
-  const totalImages = userGenerations.reduce((acc, g) => {
-    const imgs = g.images as Array<unknown> | null;
-    return acc + (imgs ? imgs.length : 0);
-  }, 0);
-
-  const generationsUsed = subscription?.generationsUsed ?? 0;
-  const generationsLimit = subscription?.generationsLimit ?? 3;
 
   const user = {
     name: session.user.name || session.user.email || "User",
@@ -56,21 +47,14 @@ export default async function DashboardPage() {
         brandUrl: g.brandUrl,
         status: g.status,
         createdAt: g.createdAt.toISOString(),
-        images: (g.images as Array<{
-          schemaId: string;
-          schemaName: string;
-          size: string;
-          url: string;
-        }> | null) ?? [],
         brandProfile: (g.brandProfile as Record<string, unknown> | null) ?? {},
         errorMessage: g.errorMessage ?? null,
       }))}
       stats={{
-        totalImages,
         completedRuns,
-        totalGenerations,
-        generationsUsed,
-        generationsLimit,
+        totalGenerations: userGenerations.length,
+        generationsUsed: subscription?.generationsUsed ?? 0,
+        generationsLimit: subscription?.generationsLimit ?? 10,
       }}
     />
   );

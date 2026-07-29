@@ -2,8 +2,12 @@
  * POST /api/extract
  *
  * Accepts { url: string } in the request body.
- * Runs the brand extraction pipeline (Puppeteer DOM scrape + Claude classification)
- * and streams progress events via SSE.
+ * Runs the full brand intelligence pipeline:
+ *   1. DOM extraction (Puppeteer)
+ *   2. Brand classification (Claude Haiku) — archetype, tone, positioning, metadata
+ *   3. AI Perception fan-out (GPT-5 mini + Claude Haiku + Gemini Flash in parallel)
+ *
+ * Streams progress events via SSE.
  *
  * Event types:
  *   { type: "status",   step: number, total: number, message: string }
@@ -20,9 +24,10 @@ import * as os from "os";
 import * as path from "path";
 import { extractDom } from "@/lib/pipeline/runPipeline";
 import { classifyBrand } from "@/lib/pipeline/classifyBrand";
+import { fetchAiPerception } from "@/lib/pipeline/fetchAiPerception";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
@@ -95,7 +100,7 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        // DOM extraction — extractDom.ts emits its own step-numbered status events
+        // Step 1-5: DOM extraction — extractDom.ts emits its own step-numbered status events
         const raw = await extractDom(normalizedUrl, workDir, emit);
 
         // Resolve downloaded brand assets to base64 data URIs before workDir is deleted
@@ -124,8 +129,18 @@ export async function POST(req: NextRequest) {
         // Inject resolved assets back into raw before classification
         rawTyped.downloadedAssets = resolvedAssets;
 
-        // Brand classification
+        // Step 6: Brand classification (archetype, tone, positioning, metadata)
+        emit({ type: "status", step: 6, total: 8, message: "Classifying brand identity and archetype..." });
         const profile = await classifyBrand(rawTyped);
+
+        // Step 7: AI Perception fan-out (GPT-5 mini + Claude Haiku + Gemini Flash in parallel)
+        emit({ type: "status", step: 7, total: 8, message: "Querying AI models for brand perception..." });
+        const brandName = profile.meta?.brandName || new URL(normalizedUrl).hostname;
+        const aiPerception = await fetchAiPerception(brandName, normalizedUrl);
+        profile.aiPerception = aiPerception;
+
+        // Step 8: Save to database
+        emit({ type: "status", step: 8, total: 8, message: "Saving brand intelligence report..." });
 
         // Insert generation row
         const [generation] = await db
@@ -134,7 +149,7 @@ export async function POST(req: NextRequest) {
             userId,
             brandUrl: normalizedUrl,
             brandProfile: profile as unknown as Record<string, unknown>,
-            status: "pending",
+            status: "complete",
           })
           .returning({ id: generations.id });
 

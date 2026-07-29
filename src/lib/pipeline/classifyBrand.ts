@@ -120,6 +120,23 @@ export interface BrandProfile {
   };
   cssVars: Record<string, string>;
   designSignal?: DesignSignal;
+  // Brand Intelligence fields
+  brandArchetype?: {
+    archetype: string;
+    rationale: string;
+  };
+  positioningSignal?: string;
+  aiPerception?: {
+    openai: { summary: string; sentimentScore: number; model: string };
+    anthropic: { summary: string; sentimentScore: number; model: string };
+    google: { summary: string; sentimentScore: number; model: string };
+  };
+  companyMetadata?: {
+    foundedYear: string | null;
+    employeeCount: string | null;
+    hqLocation: string | null;
+    fundingStage: string | null;
+  };
 }
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -310,6 +327,14 @@ interface LlmClassification {
   pricing: string;
   keyFeatures: string[];
   primaryCTA: string;
+  // Brand intelligence
+  brandArchetype: string;
+  archetypeRationale: string;
+  positioningSignal: string;
+  foundedYear: string;
+  employeeCount: string;
+  hqLocation: string;
+  fundingStage: string;
 }
 
 async function llmClassify(raw: Record<string, unknown>): Promise<LlmClassification> {
@@ -372,7 +397,14 @@ Return ONLY this JSON object (no markdown, no explanation):
   "businessModel": ["access-gated platform", "self-serve subscription", "contact-based sales", "freemium", "usage-based"],
   "pricing": "pricing description or 'Pricing not publicly available'",
   "keyFeatures": ["feature 1", "feature 2", "feature 3"],
-  "primaryCTA": "the main call-to-action button text"
+  "primaryCTA": "the main call-to-action button text",
+  "brandArchetype": "one of: The Innocent|The Sage|The Explorer|The Outlaw|The Magician|The Hero|The Lover|The Jester|The Everyman|The Caregiver|The Ruler|The Creator",
+  "archetypeRationale": "1-2 sentence explanation of why this archetype fits",
+  "positioningSignal": "2-3 sentence summary of how this brand positions itself in the market",
+  "foundedYear": "year founded if mentioned, or empty string",
+  "employeeCount": "employee count or range if mentioned, or empty string",
+  "hqLocation": "headquarters city/country if mentioned, or empty string",
+  "fundingStage": "funding stage if mentioned (e.g. Series A, bootstrapped), or empty string"
 }
 
 Rules:
@@ -382,11 +414,14 @@ Rules:
 - For businessModel: pick all that apply from the list above.
 - For productCategory: 2-3 category tags that describe the product space.
 - All fields are required. Use empty string "" or [] for fields where data is not available.
+- For brandArchetype: choose the single best-fit archetype from the provided list.
+- For positioningSignal: describe how the brand differentiates itself, not just what it does.
+- For company metadata (foundedYear, employeeCount, hqLocation, fundingStage): only fill if explicitly mentioned on the page. Otherwise return empty string.
 - Return ONLY the JSON object, no other text.`;
 
   const response = await client.messages.create({
     model: CLASSIFICATION_MODEL,
-    max_tokens: 1200,
+    max_tokens: 1600,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -736,5 +771,18 @@ export async function classifyBrand(raw: Record<string, unknown>): Promise<Brand
       bgImages: ((raw.bgImages as string[]) ?? []).slice(0, 3),
     },
     cssVars: (raw.cssVars as Record<string, string>) ?? {},
+    brandArchetype: {
+      archetype: llmData.brandArchetype || "The Creator",
+      rationale: llmData.archetypeRationale || "",
+    },
+    positioningSignal: llmData.positioningSignal || "",
+    companyMetadata: {
+      foundedYear: llmData.foundedYear || null,
+      employeeCount: llmData.employeeCount || null,
+      hqLocation: llmData.hqLocation || null,
+      fundingStage: llmData.fundingStage || null,
+    },
+    // aiPerception is populated by the extract API after calling fetchAiPerception
+    aiPerception: undefined,
   };
 }

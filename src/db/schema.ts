@@ -144,6 +144,28 @@ export const generations = pgTable(
   })
 );
 
+// ─── Competitor Comparisons ─────────────────────────────────────────────────
+// Stores comparison runs: one primary brand vs up to 3 competitors.
+// uspStatements JSONB shape: { [competitorDomain]: "Why primary wins..." }
+export const competitorComparisons = pgTable(
+  "competitor_comparisons",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    primaryBrandDomain: text("primary_brand_domain").notNull(),
+    competitorDomains: jsonb("competitor_domains").notNull(), // string[]
+    primaryProfile: jsonb("primary_profile").notNull(),
+    competitorProfiles: jsonb("competitor_profiles").notNull(), // BrandProfile[]
+    uspStatements: jsonb("usp_statements").notNull(), // { [domain]: string }
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdx: index("competitor_comparisons_user_id_idx").on(table.userId),
+    primaryIdx: index("competitor_comparisons_primary_idx").on(table.primaryBrandDomain),
+    createdIdx: index("competitor_comparisons_created_at_idx").on(table.createdAt),
+  })
+);
+
 // ─── Relations ───────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ one, many }) => ({
