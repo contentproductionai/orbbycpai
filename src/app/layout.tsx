@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Orb | On-Brand Social Content in 60 Seconds",
-  description: "Orb extracts your brand identity and generates on-brand social media content across every platform in seconds.",
+  title: "Orb | Know Any Company. From a URL.",
+  description: "Drop a URL. Get a full company intelligence report in under 60 seconds — visual identity, voice, archetype, and how GPT, Claude, and Gemini describe them.",
   metadataBase: new URL("https://www.contentproduction.ai"),
   openGraph: {
-    title: "Orb | On-Brand Social Content in 60 Seconds",
-    description: "Paste a URL. Get 40 on-brand social posts — colors, fonts, and voice matched to your brand.",
+    title: "Orb | Know Any Company. From a URL.",
+    description: "Drop a URL. Get a full company intelligence report in under 60 seconds — visual identity, voice, archetype, and how GPT, Claude, and Gemini describe them.",
     url: "https://www.contentproduction.ai",
     siteName: "Orb",
     locale: "en_US",
@@ -17,14 +17,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Orb — On-Brand Social Content in 60 Seconds",
+        alt: "Orb — Know Any Company. From a URL.",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Orb | On-Brand Social Content in 60 Seconds",
-    description: "Paste a URL. Get 40 on-brand social posts — colors, fonts, and voice matched to your brand.",
+    title: "Orb | Know Any Company. From a URL.",
+    description: "Drop a URL. Get a full company intelligence report in under 60 seconds.",
     images: ["/og-image.png"],
   },
   robots: { index: true, follow: true },
@@ -38,12 +38,12 @@ const jsonLd = {
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
   description:
-    "AI-powered social media content generator that extracts brand identity from any URL and generates on-brand posts for every platform in seconds.",
+    "On-demand company intelligence. Drop any URL and get a full intelligence report — visual identity, voice, archetype, product positioning, and how GPT, Claude, and Gemini describe the company.",
   offers: {
     "@type": "Offer",
     price: "0",
     priceCurrency: "USD",
-    description: "Free preview with paid download tiers available.",
+    description: "Free preview with paid tiers available.",
   },
   creator: {
     "@type": "Organization",
@@ -51,11 +51,12 @@ const jsonLd = {
     url: "https://www.contentproduction.ai",
   },
   featureList: [
-    "Brand identity extraction from any URL",
-    "AI-generated social media posts",
-    "On-brand colors, fonts, and voice",
-    "Facebook, Instagram, LinkedIn, and Twitter/X support",
-    "40 posts generated per brand",
+    "Company intelligence from any URL",
+    "Visual identity extraction — colors, fonts, shape language",
+    "Brand archetype classification",
+    "AI perception from GPT, Claude, and Gemini",
+    "Competitor comparison with USP generation",
+    "Product and positioning intelligence",
   ],
 };
 

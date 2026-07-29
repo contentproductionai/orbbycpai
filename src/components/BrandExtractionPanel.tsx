@@ -330,10 +330,10 @@ export default function BrandExtractionPanel() {
           }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.7)" }}>
-                Unlock the full intelligence report
+                Unlock the full company profile
               </div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
-                AI perception from GPT, Claude & Gemini · Competitor comparison · Positioning signal
+                AI perception from GPT, Claude & Gemini · Competitor comparison · Positioning intelligence
               </div>
             </div>
             <Link

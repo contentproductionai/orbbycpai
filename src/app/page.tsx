@@ -39,25 +39,22 @@ export default function HomePage() {
           {/* Badge */}
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-subtle)", border: "1px solid rgba(0,212,170,0.25)", borderRadius: 100, padding: "4px 12px", marginBottom: 28 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)" }} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>AI-Powered Brand Intelligence</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--brand-primary)", letterSpacing: "0.02em" }}>On-Demand Company Intelligence</span>
           </div>
 
           {/* H1 */}
           <h1 style={{ margin: "0 0 18px", padding: 0, lineHeight: 1.05, letterSpacing: "-0.03em" }}>
             <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "#ffffff" }}>
-              Reverse-engineer
+              Know any company.
             </span>
             <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "#00d4aa" }}>
-              any brand.
-            </span>
-            <span style={{ display: "block", fontSize: "clamp(36px, 5.5vw, 68px)", fontWeight: 700, color: "rgba(255,255,255,0.28)" }}>
               From a URL.
             </span>
           </h1>
 
           {/* Subheadline */}
           <p style={{ fontSize: "clamp(15px, 1.8vw, 18px)", color: "var(--text-secondary)", maxWidth: 540, lineHeight: 1.65, marginBottom: 36 }}>
-            Drop any URL. Orb extracts brand DNA — colors, fonts, tone, archetype — and shows you how GPT, Claude, and Gemini perceive it. Understand your brand. Outposition your competitors.
+            Drop any URL. Orb scrapes the live site, reads the visual system, analyzes the copy, and queries GPT, Claude, and Gemini to capture how each model describes the company — unprompted. A full intelligence profile in under 60 seconds.
           </p>
 
           {/* Live demo panel */}
@@ -65,14 +62,43 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Problem / Built / Result ── */}
+      <section style={{ maxWidth: 860, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0, borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
+          {[
+            {
+              label: "PROBLEM",
+              text: "Most people walk into calls, pitches, and competitive reviews knowing almost nothing about the company on the other side. You can spend 20 minutes on their website and still not know how they position themselves, what AI models say about them, or how they compare to anyone else. The information exists — it's just scattered, slow to gather, and impossible to standardize.",
+            },
+            {
+              label: "BUILT",
+              text: "Orb takes a URL and returns the company. It scrapes and renders the live site, reads the visual system with vision models, and analyzes the copy for voice, archetype, and positioning. Then it queries GPT, Claude, and Gemini directly to capture how each model describes that company unprompted. The output is a structured intelligence profile — comparable across any set of companies, generated in under 60 seconds.",
+            },
+            {
+              label: "RESULT",
+              text: "A pre-call download that used to take 30 minutes of research now takes 10 seconds. Sales teams use it before discovery calls. Investors use it for deal sourcing. Founders use it to understand their competitive set. Anyone who needs to know a company fast uses Orb.",
+            },
+          ].map((item) => (
+            <div key={item.label} style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 32, padding: "32px 0 32px 32px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--brand-primary)", letterSpacing: "0.1em", paddingTop: 3 }}>
+                {item.label}
+              </div>
+              <p style={{ fontSize: 15, color: "rgba(255,255,255,0.65)", lineHeight: 1.75, margin: 0 }}>
+                {item.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ── What you get ── */}
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <h2 style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8 }}>
-            Everything you need to know about a brand
+            Everything in one profile
           </h2>
-          <p style={{ fontSize: 15, color: "var(--text-secondary)", maxWidth: 480, margin: "0 auto" }}>
-            One URL. A complete intelligence report in under 60 seconds.
+          <p style={{ fontSize: 15, color: "var(--text-secondary)", maxWidth: 440, margin: "0 auto" }}>
+            One URL. A complete intelligence report. No research required.
           </p>
         </div>
 
@@ -86,27 +112,27 @@ export default function HomePage() {
             {
               icon: "✦",
               title: "Brand Archetype",
-              body: "Classified against all 12 Jungian archetypes with a rationale. Understand the psychological positioning behind the brand.",
+              body: "Classified against all 12 Jungian archetypes with a rationale. Understand the psychological positioning driving the company's communication.",
             },
             {
               icon: "⬡",
-              title: "AI Brand Perception",
-              body: "See how GPT-5, Claude, and Gemini describe the brand based on their training data. A proxy for real-world brand equity.",
+              title: "AI Perception",
+              body: "GPT-5, Claude, and Gemini each describe the company based on their training data — a direct read on public brand equity and awareness.",
             },
             {
               icon: "◇",
               title: "Product Intelligence",
-              body: "Business model, pricing, target customer, key features, and primary CTA — everything a competitive analyst needs.",
+              body: "Business model, pricing, target customer, key features, and primary CTA — everything a competitive analyst or sales rep needs before a call.",
             },
             {
               icon: "⊕",
               title: "Competitor Comparison",
-              body: "Run up to 3 competitors side-by-side. See where you win, where you're exposed, and get AI-generated USP statements.",
+              body: "Run up to 3 companies side-by-side. See where you differentiate, where you're exposed, and get AI-generated positioning statements.",
             },
             {
               icon: "≡",
-              title: "Tone of Voice",
-              body: "Directness, formality, emotionality — classified and summarized so you know exactly how a brand communicates.",
+              title: "Tone & Voice",
+              body: "Directness, formality, emotionality — classified and summarized so you understand exactly how a company communicates and why.",
             },
           ].map((f) => (
             <div key={f.title} className="surface" style={{ padding: 28 }}>
@@ -118,58 +144,21 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── How it works ── */}
-      <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
-        <div style={{ textAlign: "center", marginBottom: 48 }}>
-          <h2 style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8 }}>
-            How it works
-          </h2>
-          <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>Two steps. No setup required.</p>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-          {[
-            {
-              step: "01",
-              icon: "⊕",
-              title: "Drop a URL",
-              body: "Paste any brand website — yours, a competitor, or a brand you admire. Orb scrapes the live site, not cached data.",
-            },
-            {
-              step: "02",
-              icon: "◈",
-              title: "AI extracts the brand",
-              body: "Claude analyzes the DOM to extract visual tokens, tone, archetype, and positioning. Then GPT, Claude, and Gemini each weigh in on brand perception.",
-            },
-            {
-              step: "03",
-              icon: "✦",
-              title: "Get your intelligence report",
-              body: "A full brand report card — plus competitor comparison and AI-generated USP statements — ready to act on.",
-            },
-          ].map((s) => (
-            <div key={s.step} className="surface" style={{ padding: 28, position: "relative" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--brand-primary)", letterSpacing: "0.1em", marginBottom: 16, opacity: 0.7 }}>STEP {s.step}</div>
-              <div style={{ fontSize: 24, marginBottom: 12, color: "var(--brand-primary)" }}>{s.icon}</div>
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8, letterSpacing: "-0.01em" }}>{s.title}</h3>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.65 }}>{s.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {/* ── Use cases ── */}
+
+      {/* ── Who uses it ── */}
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 96px", width: "100%" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <h2 style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 8 }}>
-            Built for people who think about brands
+            For anyone who needs to know a company fast
           </h2>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
           {[
-            { role: "Founders", use: "Understand your own brand positioning before a board meeting or investor pitch." },
-            { role: "CMOs", use: "Audit a competitor's brand in minutes. Know their archetype, tone, and how AI perceives them." },
-            { role: "Agencies", use: "Walk into a new client meeting with a full brand audit already done. Impress before you pitch." },
-            { role: "Investors", use: "Quickly assess brand strength and positioning as part of due diligence." },
+            { role: "Sales", use: "Drop a prospect's URL before a discovery call. Walk in knowing their positioning, voice, and how AI describes them." },
+            { role: "Investors", use: "Assess brand strength and market positioning as part of deal sourcing or due diligence — in seconds, not hours." },
+            { role: "Founders", use: "Understand your competitive set at a level most founders never reach. Know exactly where you're differentiated." },
+            { role: "Agencies", use: "Walk into a new client meeting with a full company audit already done. Impress before you pitch." },
           ].map((u) => (
             <div key={u.role} style={{
               background: "rgba(255,255,255,0.02)",
@@ -193,19 +182,19 @@ export default function HomePage() {
             {
               name: "Starter",
               price: "$29",
-              features: ["10 brand analyses/mo", "Full brand report", "AI perception (3 models)", "Competitor comparison", "Export to PDF"],
+              features: ["10 company profiles/mo", "Full intelligence report", "AI perception — 3 models", "Competitor comparison", "Export to PDF"],
               highlight: false,
             },
             {
               name: "Growth",
               price: "$79",
-              features: ["50 brand analyses/mo", "Full brand report", "AI perception (3 models)", "Competitor comparison", "Export to PDF", "Analysis history", "Priority support"],
+              features: ["50 company profiles/mo", "Full intelligence report", "AI perception — 3 models", "Competitor comparison", "Export to PDF", "Profile history", "Priority support"],
               highlight: true,
             },
             {
               name: "Pro",
               price: "$149",
-              features: ["Unlimited analyses", "Full brand report", "AI perception (3 models)", "Competitor comparison", "Export to PDF", "Analysis history", "API access", "Dedicated support"],
+              features: ["Unlimited profiles", "Full intelligence report", "AI perception — 3 models", "Competitor comparison", "Export to PDF", "Profile history", "API access", "Dedicated support"],
               highlight: false,
             },
           ].map((plan) => (
