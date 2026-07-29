@@ -86,7 +86,7 @@ export const subscriptions = pgTable(
     tier: text("tier").notNull().default("free"),
     status: text("status").notNull().default("active"),
     generationsUsed: integer("generations_used").notNull().default(0),
-    generationsLimit: integer("generations_limit").notNull().default(3),
+    generationsLimit: integer("generations_limit").notNull().default(5),
     currentPeriodStart: timestamp("current_period_start", { mode: "date" }),
     currentPeriodEnd: timestamp("current_period_end", { mode: "date" }),
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),

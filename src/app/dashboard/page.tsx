@@ -54,7 +54,8 @@ export default async function DashboardPage() {
         completedRuns,
         totalGenerations: userGenerations.length,
         generationsUsed: subscription?.generationsUsed ?? 0,
-        generationsLimit: subscription?.generationsLimit ?? 10,
+        generationsLimit: subscription?.generationsLimit ?? 5,
+        tier: subscription?.tier ?? "free",
       }}
     />
   );

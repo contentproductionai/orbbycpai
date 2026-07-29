@@ -59,7 +59,7 @@ interface ComparisonResult {
 }
 
 interface User { name: string; email: string; initials: string }
-interface Stats { completedRuns: number; totalGenerations: number; generationsUsed: number; generationsLimit: number }
+interface Stats { completedRuns: number; totalGenerations: number; generationsUsed: number; generationsLimit: number; tier: string }
 interface Props { user: User; generations: Generation[]; stats: Stats }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -589,7 +589,35 @@ function ComparisonTab({ primaryProfile }: { primaryProfile: BrandProfile }) {
 
 // ─── New Analysis Panel ───────────────────────────────────────────────────────
 
-function NewAnalysisPanel({ onComplete }: { onComplete: (generationId: string, profile: BrandProfile) => void }) {
+// ─── Upgrade Gate ────────────────────────────────────────────────────────────
+
+function UpgradeGate({ feature }: { feature: string }) {
+  return (
+    <Card style={{ textAlign: "center", padding: "48px 24px" }}>
+      <div style={{ fontSize: 28, marginBottom: 16 }}>🔒</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.8)", marginBottom: 8 }}>
+        {feature} is a paid feature
+      </div>
+      <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.6, margin: "0 0 20px" }}>
+        Your first analysis includes the full report. Upgrade to Starter to unlock {feature} on every analysis.
+      </p>
+      <a
+        href="/#pricing"
+        style={{
+          display: "inline-block",
+          background: "#00d4aa", color: "#000",
+          fontSize: 13, fontWeight: 600,
+          padding: "10px 24px", borderRadius: 8,
+          textDecoration: "none",
+        }}
+      >
+        View plans →
+      </a>
+    </Card>
+  );
+}
+
+function NewAnalysisPanel({ onComplete, runsUsed, runsLimit, tier }: { onComplete: (generationId: string, profile: BrandProfile, accessTier: string) => void; runsUsed: number; runsLimit: number; tier: string }) {
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
@@ -611,6 +639,13 @@ function NewAnalysisPanel({ onComplete }: { onComplete: (generationId: string, p
     });
 
     if (!res.ok || !res.body) {
+      // Handle upgrade_required (402)
+      if (res.status === 402) {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.message || "You've used all your free analyses. Upgrade to continue.");
+        setIsLoading(false);
+        return;
+      }
       setError("Failed to start analysis.");
       setIsLoading(false);
       return;
@@ -635,7 +670,7 @@ function NewAnalysisPanel({ onComplete }: { onComplete: (generationId: string, p
             if (event.type === "complete") {
               setIsLoading(false);
               setUrl("");
-              onComplete(event.generationId, event.brandProfile);
+              onComplete(event.generationId, event.brandProfile, event.accessTier || "full");
               return;
             }
             if (event.type === "error") {
@@ -663,6 +698,31 @@ function NewAnalysisPanel({ onComplete }: { onComplete: (generationId: string, p
       padding: "16px 20px",
       marginBottom: 20,
     }}>
+      {/* Usage indicator */}
+      {tier === "free" && (
+        <div style={{ marginBottom: 12, padding: "8px 10px", background: "rgba(255,255,255,0.03)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>FREE TIER</span>
+            <span style={{ fontSize: 10, color: runsUsed >= runsLimit ? "rgba(255,100,100,0.7)" : "rgba(255,255,255,0.3)" }}>
+              {runsUsed}/{runsLimit} analyses used
+            </span>
+          </div>
+          <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2 }}>
+            <div style={{
+              height: "100%",
+              width: `${Math.min(100, (runsUsed / runsLimit) * 100)}%`,
+              background: runsUsed >= runsLimit ? "rgba(255,100,100,0.6)" : "#00d4aa",
+              borderRadius: 2,
+              transition: "width 0.3s",
+            }} />
+          </div>
+          {runsUsed >= runsLimit && (
+            <div style={{ marginTop: 6, fontSize: 10, color: "rgba(255,100,100,0.7)" }}>
+              Upgrade to continue analyzing →
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(0,212,170,0.7)", marginBottom: 10, letterSpacing: "0.04em" }}>
         NEW ANALYSIS
       </div>
@@ -722,11 +782,16 @@ export default function DashboardClient({ user, generations: initialGenerations,
   const [generations, setGenerations] = useState(initialGenerations);
   const [selectedId, setSelectedId] = useState<string | null>(initialGenerations[0]?.id ?? null);
   const [activeTab, setActiveTab] = useState<"report" | "perception" | "comparison">("report");
+  const [runsUsed, setRunsUsed] = useState(stats.generationsUsed);
 
   const selectedGen = generations.find(g => g.id === selectedId);
   const selectedProfile = selectedGen?.brandProfile as BrandProfile | undefined;
+  // Determine if the selected report has full AI perception data
+  const selectedHasPerception = !!(selectedProfile?.aiPerception &&
+    selectedProfile.aiPerception.openai?.summary &&
+    selectedProfile.aiPerception.anthropic?.summary);
 
-  const handleNewAnalysis = (generationId: string, profile: BrandProfile) => {
+  const handleNewAnalysis = (generationId: string, profile: BrandProfile, accessTier: string) => {
     const newGen: Generation = {
       id: generationId,
       brandUrl: profile.meta?.url || "",
@@ -737,7 +802,9 @@ export default function DashboardClient({ user, generations: initialGenerations,
     };
     setGenerations(prev => [newGen, ...prev]);
     setSelectedId(generationId);
-    setActiveTab("report");
+    setRunsUsed(prev => prev + 1);
+    // For full access runs, go to perception tab to show off the feature
+    setActiveTab(accessTier === "full" ? "perception" : "report");
   };
 
   return (
@@ -767,7 +834,12 @@ export default function DashboardClient({ user, generations: initialGenerations,
       <div style={{ flex: 1, maxWidth: 1280, margin: "0 auto", width: "100%", padding: "24px", display: "grid", gridTemplateColumns: "260px 1fr", gap: 20 }}>
         {/* Sidebar */}
         <div>
-          <NewAnalysisPanel onComplete={handleNewAnalysis} />
+          <NewAnalysisPanel
+            onComplete={handleNewAnalysis}
+            runsUsed={runsUsed}
+            runsLimit={stats.generationsLimit}
+            tier={stats.tier}
+          />
 
           {/* History */}
           <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
@@ -883,8 +955,16 @@ export default function DashboardClient({ user, generations: initialGenerations,
 
               {/* Tab content */}
               {activeTab === "report" && <BrandReportTab profile={selectedProfile} />}
-              {activeTab === "perception" && <AiPerceptionTab perception={selectedProfile.aiPerception} />}
-              {activeTab === "comparison" && <ComparisonTab primaryProfile={selectedProfile} />}
+              {activeTab === "perception" && (
+                selectedHasPerception
+                  ? <AiPerceptionTab perception={selectedProfile!.aiPerception} />
+                  : <UpgradeGate feature="AI Perception" />
+              )}
+              {activeTab === "comparison" && (
+                selectedHasPerception
+                  ? <ComparisonTab primaryProfile={selectedProfile!} />
+                  : <UpgradeGate feature="Competitor Comparison" />
+              )}
             </>
           )}
         </div>

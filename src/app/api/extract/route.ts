@@ -2,22 +2,27 @@
  * POST /api/extract
  *
  * Accepts { url: string } in the request body.
- * Runs the full brand intelligence pipeline:
- *   1. DOM extraction (Puppeteer)
- *   2. Brand classification (Claude Haiku) — archetype, tone, positioning, metadata
- *   3. AI Perception fan-out (GPT-5 mini + Claude Haiku + Gemini Flash in parallel)
+ * Runs the full brand intelligence pipeline with freemium enforcement:
+ *
+ *   Free tier (no paid plan):
+ *     Run 1:    Full report — Brand Report + AI Perception (all 3 models)
+ *     Runs 2-5: Partial report — Brand Report only (AI Perception skipped)
+ *     Run 6+:   Blocked — returns 402 with upgrade prompt
+ *
+ *   Paid tiers: Unlimited full reports
  *
  * Streams progress events via SSE.
  *
  * Event types:
  *   { type: "status",   step: number, total: number, message: string }
- *   { type: "complete", generationId: string, brandProfile: BrandProfile }
+ *   { type: "complete", generationId: string, brandProfile: BrandProfile, accessTier: "full" | "partial" }
  *   { type: "error",    message: string }
  */
 import { NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { generations } from "@/db/schema";
+import { generations, subscriptions } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as os from "os";
@@ -28,6 +33,10 @@ import { fetchAiPerception } from "@/lib/pipeline/fetchAiPerception";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
+
+// ─── Free tier limits ─────────────────────────────────────────────────────────
+const FREE_FULL_RUNS = 1;   // First run: full report including AI Perception
+const FREE_TOTAL_RUNS = 5;  // Runs 2-5: partial (Brand Report only). Run 6+: blocked.
 
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
@@ -51,6 +60,30 @@ function fileToDataUri(filePath: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** Get or create a subscription row for the user. Returns the current usage state. */
+async function getUserSubscription(userId: string) {
+  const existing = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+
+  if (existing.length > 0) return existing[0];
+
+  // First time — create a free subscription row
+  const [created] = await db
+    .insert(subscriptions)
+    .values({
+      userId,
+      tier: "free",
+      status: "active",
+      generationsUsed: 0,
+      generationsLimit: FREE_TOTAL_RUNS,
+    })
+    .returning();
+  return created;
 }
 
 export async function POST(req: NextRequest) {
@@ -88,6 +121,30 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // ─── Freemium check ───────────────────────────────────────────────────────
+  const sub = await getUserSubscription(userId);
+  const isPaid = sub.tier !== "free";
+  const runsUsed = sub.generationsUsed ?? 0;
+
+  // Paid users: unlimited. Free users: block at run 6+
+  if (!isPaid && runsUsed >= FREE_TOTAL_RUNS) {
+    return new Response(
+      JSON.stringify({
+        error: "upgrade_required",
+        message: `You've used all ${FREE_TOTAL_RUNS} free analyses. Upgrade to Starter for unlimited full reports.`,
+        runsUsed,
+        limit: FREE_TOTAL_RUNS,
+      }),
+      { status: 402, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Determine access tier for this run
+  // Run 1 (index 0) = full. Runs 2-5 (index 1-4) = partial.
+  const accessTier: "full" | "partial" =
+    isPaid || runsUsed < FREE_FULL_RUNS ? "full" : "partial";
+
   const normalizedUrl = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
   const workDir = path.join(os.tmpdir(), `orb-extract-${randomUUID()}`);
   fs.mkdirSync(workDir, { recursive: true });
@@ -100,10 +157,9 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        // Step 1-5: DOM extraction — extractDom.ts emits its own step-numbered status events
+        // Steps 1-5: DOM extraction
         const raw = await extractDom(normalizedUrl, workDir, emit);
 
-        // Resolve downloaded brand assets to base64 data URIs before workDir is deleted
         const rawTyped = raw as Record<string, unknown>;
         const downloadedAssets = (rawTyped.downloadedAssets as Array<{
           src: string;
@@ -117,41 +173,40 @@ export async function POST(req: NextRequest) {
           inHero: boolean;
         }>) ?? [];
 
-        // Convert each downloaded file to a data URI (capped at 500KB)
         const resolvedAssets = downloadedAssets.map((asset) => {
           const dataUri = fileToDataUri(asset.localPath);
-          return {
-            ...asset,
-            localUrl: dataUri || asset.src, // fall back to original src if too large
-          };
-        }).filter((a) => a.localUrl); // drop any that failed completely
+          return { ...asset, localUrl: dataUri || asset.src };
+        }).filter((a) => a.localUrl);
 
-        // Inject resolved assets back into raw before classification
         rawTyped.downloadedAssets = resolvedAssets;
 
-        // Step 6: Brand classification (archetype, tone, positioning, metadata)
-        emit({ type: "status", step: 6, total: 8, message: "Classifying brand identity and archetype..." });
+        // Step 6: Brand classification
+        const totalSteps = accessTier === "full" ? 8 : 7;
+        emit({ type: "status", step: 6, total: totalSteps, message: "Classifying brand identity and archetype..." });
         const profile = await classifyBrand(rawTyped);
 
-        // Step 7: AI Perception fan-out (ChatGPT + Claude + Gemini in parallel)
-        emit({ type: "status", step: 7, total: 8, message: "Querying AI models for brand perception..." });
-        const brandName = profile.meta?.brandName || new URL(normalizedUrl).hostname;
-        // Build scraped context to ground the AI perception analysis in actual site content
-        const copyText = rawTyped.copyText as { h1?: string[]; h2?: string[]; bodyParagraphs?: string[] } | undefined;
-        const bodySnippet = (rawTyped.bodySnippet as string | undefined) ?? "";
-        const scrapedContext = [
-          copyText?.h1?.join(" | "),
-          copyText?.h2?.slice(0, 4).join(" | "),
-          copyText?.bodyParagraphs?.slice(0, 3).join(" "),
-          bodySnippet.slice(0, 800),
-        ].filter(Boolean).join("\n").slice(0, 2000);
-        const aiPerception = await fetchAiPerception(brandName, normalizedUrl, scrapedContext || undefined);
-        profile.aiPerception = aiPerception;
+        // Step 7: AI Perception (full tier only)
+        if (accessTier === "full") {
+          emit({ type: "status", step: 7, total: 8, message: "Querying AI models for brand perception..." });
+          const brandName = profile.meta?.brandName || new URL(normalizedUrl).hostname;
+          const copyText = rawTyped.copyText as { h1?: string[]; h2?: string[]; bodyParagraphs?: string[] } | undefined;
+          const bodySnippet = (rawTyped.bodySnippet as string | undefined) ?? "";
+          const scrapedContext = [
+            copyText?.h1?.join(" | "),
+            copyText?.h2?.slice(0, 4).join(" | "),
+            copyText?.bodyParagraphs?.slice(0, 3).join(" "),
+            bodySnippet.slice(0, 800),
+          ].filter(Boolean).join("\n").slice(0, 2000);
+          const aiPerception = await fetchAiPerception(brandName, normalizedUrl, scrapedContext || undefined);
+          profile.aiPerception = aiPerception;
+        } else {
+          // Partial tier: mark AI perception as locked so the UI can show the gate
+          profile.aiPerception = undefined;
+        }
 
-        // Step 8: Save to database
-        emit({ type: "status", step: 8, total: 8, message: "Saving brand intelligence report..." });
+        // Step 7 (partial) / Step 8 (full): Save to database
+        emit({ type: "status", step: totalSteps, total: totalSteps, message: "Saving intelligence report..." });
 
-        // Insert generation row
         const [generation] = await db
           .insert(generations)
           .values({
@@ -162,10 +217,19 @@ export async function POST(req: NextRequest) {
           })
           .returning({ id: generations.id });
 
+        // Increment usage counter
+        await db
+          .update(subscriptions)
+          .set({ generationsUsed: runsUsed + 1, updatedAt: new Date() })
+          .where(eq(subscriptions.userId, userId));
+
         emit({
           type: "complete",
           generationId: generation.id,
           brandProfile: profile,
+          accessTier,
+          runsUsed: runsUsed + 1,
+          runsRemaining: isPaid ? null : Math.max(0, FREE_TOTAL_RUNS - (runsUsed + 1)),
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
