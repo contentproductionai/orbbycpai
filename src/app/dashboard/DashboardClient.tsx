@@ -375,9 +375,9 @@ function AiPerceptionTab({ perception }: { perception?: AiPerception }) {
   }
 
   const models = [
-    { key: "openai" as const, label: "GPT-5 mini", icon: "⬡", color: "#10a37f" },
-    { key: "anthropic" as const, label: "Claude Haiku", icon: "◈", color: "#d97706" },
-    { key: "google" as const, label: "Gemini Flash", icon: "◇", color: "#4285f4" },
+    { key: "openai" as const, label: "ChatGPT", icon: "⬡", color: "#10a37f" },
+    { key: "anthropic" as const, label: "Claude", icon: "◈", color: "#d97706" },
+    { key: "google" as const, label: "Gemini", icon: "◇", color: "#4285f4" },
   ];
 
   return (
@@ -666,41 +666,41 @@ function NewAnalysisPanel({ onComplete }: { onComplete: (generationId: string, p
       <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(0,212,170,0.7)", marginBottom: 10, letterSpacing: "0.04em" }}>
         NEW ANALYSIS
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{
-          flex: 1, display: "flex", alignItems: "center", gap: 8,
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 8, padding: "8px 12px",
-        }}>
-          <span style={{ color: "rgba(0,212,170,0.6)", fontSize: 14 }}>⊕</span>
-          <input
-            type="url"
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleAnalyze()}
-            placeholder="Enter any brand URL..."
-            disabled={isLoading}
-            style={{
-              flex: 1, background: "transparent", border: "none", outline: "none",
-              fontSize: 13, color: "rgba(255,255,255,0.8)", fontFamily: "monospace",
-            }}
-          />
-        </div>
-        <button
-          onClick={handleAnalyze}
-          disabled={!url.trim() || isLoading}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 8, padding: "8px 12px", marginBottom: 8,
+      }}>
+        <span style={{ color: "rgba(0,212,170,0.6)", fontSize: 14, flexShrink: 0 }}>⊕</span>
+        <input
+          type="url"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleAnalyze()}
+          placeholder="Enter any company URL..."
+          disabled={isLoading}
           style={{
-            background: !url.trim() || isLoading ? "rgba(0,212,170,0.15)" : "#00d4aa",
-            color: !url.trim() || isLoading ? "rgba(0,212,170,0.5)" : "#000",
-            border: "none", borderRadius: 8, padding: "8px 16px",
-            fontSize: 12, fontWeight: 600,
-            cursor: !url.trim() || isLoading ? "not-allowed" : "pointer",
+            flex: 1, background: "transparent", border: "none", outline: "none",
+            fontSize: 13, color: "rgba(255,255,255,0.8)", fontFamily: "monospace",
+            minWidth: 0,
           }}
-        >
-          {isLoading ? "..." : "Analyze →"}
-        </button>
+        />
       </div>
+      <button
+        onClick={handleAnalyze}
+        disabled={!url.trim() || isLoading}
+        style={{
+          width: "100%",
+          background: !url.trim() || isLoading ? "rgba(0,212,170,0.15)" : "#00d4aa",
+          color: !url.trim() || isLoading ? "rgba(0,212,170,0.5)" : "#000",
+          border: "none", borderRadius: 8, padding: "10px 16px",
+          fontSize: 12, fontWeight: 600,
+          cursor: !url.trim() || isLoading ? "not-allowed" : "pointer",
+        }}
+      >
+        {isLoading ? "Analyzing..." : "Analyze →"}
+      </button>
       {isLoading && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
           <div style={{
