@@ -133,10 +133,19 @@ export async function POST(req: NextRequest) {
         emit({ type: "status", step: 6, total: 8, message: "Classifying brand identity and archetype..." });
         const profile = await classifyBrand(rawTyped);
 
-        // Step 7: AI Perception fan-out (GPT-5 mini + Claude Haiku + Gemini Flash in parallel)
+        // Step 7: AI Perception fan-out (ChatGPT + Claude + Gemini in parallel)
         emit({ type: "status", step: 7, total: 8, message: "Querying AI models for brand perception..." });
         const brandName = profile.meta?.brandName || new URL(normalizedUrl).hostname;
-        const aiPerception = await fetchAiPerception(brandName, normalizedUrl);
+        // Build scraped context to ground the AI perception analysis in actual site content
+        const copyText = rawTyped.copyText as { h1?: string[]; h2?: string[]; bodyParagraphs?: string[] } | undefined;
+        const bodySnippet = (rawTyped.bodySnippet as string | undefined) ?? "";
+        const scrapedContext = [
+          copyText?.h1?.join(" | "),
+          copyText?.h2?.slice(0, 4).join(" | "),
+          copyText?.bodyParagraphs?.slice(0, 3).join(" "),
+          bodySnippet.slice(0, 800),
+        ].filter(Boolean).join("\n").slice(0, 2000);
+        const aiPerception = await fetchAiPerception(brandName, normalizedUrl, scrapedContext || undefined);
         profile.aiPerception = aiPerception;
 
         // Step 8: Save to database

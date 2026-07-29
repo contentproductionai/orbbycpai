@@ -22,23 +22,32 @@ export interface AiPerception {
   google: AiPerceptionEntry;
 }
 
-const PERCEPTION_PROMPT = (brandName: string, url: string) =>
-  `You are a senior brand analyst. Based on your training data and knowledge, describe how the company "${brandName}" (${url}) is perceived by the general public and business community.
+/**
+ * Build the perception prompt. Includes scraped context so models can
+ * reason from actual site content rather than just memory.
+ */
+const PERCEPTION_PROMPT = (brandName: string, url: string, context?: string) => {
+  const contextBlock = context
+    ? `\n\nHere is content scraped directly from their website to inform your analysis:\n---\n${context.slice(0, 1500)}\n---\n`
+    : "";
+
+  return `You are a senior analyst specializing in brand and company intelligence. Analyze how the company "${brandName}" (${url}) is perceived — drawing on both your training data and the website content provided below.${contextBlock}
 
 Provide a substantive analysis covering:
 - What this company does and what it is known for
-- Its reputation, brand positioning, and market standing
-- Key associations, values, or qualities people associate with it
-- Any notable strengths or weaknesses in how it is perceived
-- Overall sentiment and the reasons behind it
+- How it positions itself in its market and who it serves
+- Key brand associations, values, and qualities
+- How AI systems and the broader market are likely to perceive it
+- Overall sentiment and why
 
-If you have limited knowledge of this specific company, say so briefly and infer what you can from the URL and domain context.
+Be direct and specific. Do not hedge excessively — make your best assessment based on available evidence.
 
 Return ONLY this JSON object (no markdown, no explanation, no code fences):
 {
-  "summary": "4-6 sentence analysis covering what the company does, its reputation, positioning, and sentiment",
+  "summary": "4-6 sentence analysis covering what the company does, its positioning, key associations, and overall sentiment",
   "sentimentScore": 4
 }`;
+};
 
 function parsePerceptionResponse(text: string): { summary: string; sentimentScore: number } {
   try {
@@ -55,19 +64,21 @@ function parsePerceptionResponse(text: string): { summary: string; sentimentScor
 }
 
 /** Query ChatGPT via OpenAI SDK (direct, no proxy) */
-async function queryOpenAI(brandName: string, url: string): Promise<AiPerceptionEntry> {
-  const apiKey = process.env.OPENAI_API_KEY;
+async function queryOpenAI(brandName: string, url: string, context?: string): Promise<AiPerceptionEntry> {
+  // Support both OPENAI_API_KEY and OPENAI_KEY as fallback
+  const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY;
   if (!apiKey) {
     console.warn("[fetchAiPerception] OPENAI_API_KEY not set — skipping ChatGPT");
     return { summary: "OpenAI API key not configured.", sentimentScore: 3, model: "chatgpt" };
   }
   try {
+    // Always use direct OpenAI endpoint — never the Manus proxy
     const client = new OpenAI({ apiKey, baseURL: "https://api.openai.com/v1" });
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      max_tokens: 600,
-      temperature: 0.3,
-      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url) }],
+      max_tokens: 700,
+      temperature: 0.4,
+      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url, context) }],
     });
     const text = response.choices[0]?.message?.content?.trim() ?? "";
     const parsed = parsePerceptionResponse(text);
@@ -79,7 +90,7 @@ async function queryOpenAI(brandName: string, url: string): Promise<AiPerception
 }
 
 /** Query Claude via Anthropic SDK (direct) */
-async function queryAnthropic(brandName: string, url: string): Promise<AiPerceptionEntry> {
+async function queryAnthropic(brandName: string, url: string, context?: string): Promise<AiPerceptionEntry> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.warn("[fetchAiPerception] ANTHROPIC_API_KEY not set — skipping Claude");
@@ -89,8 +100,8 @@ async function queryAnthropic(brandName: string, url: string): Promise<AiPercept
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 600,
-      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url) }],
+      max_tokens: 700,
+      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url, context) }],
     });
     const text =
       response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
@@ -103,17 +114,18 @@ async function queryAnthropic(brandName: string, url: string): Promise<AiPercept
 }
 
 /** Query Gemini via REST API */
-async function queryGemini(brandName: string, url: string): Promise<AiPerceptionEntry> {
+async function queryGemini(brandName: string, url: string, context?: string): Promise<AiPerceptionEntry> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("[fetchAiPerception] GEMINI_API_KEY not set — skipping Gemini");
     return { summary: "Gemini API key not configured.", sentimentScore: 3, model: "gemini" };
   }
   try {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    // gemini-3-flash-preview is the current working model for this key
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
     const body = {
-      contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url) }] }],
-      generationConfig: { maxOutputTokens: 600, temperature: 0.3 },
+      contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
+      generationConfig: { maxOutputTokens: 700, temperature: 0.4 },
     };
     const res = await fetch(endpoint, {
       method: "POST",
@@ -135,16 +147,18 @@ async function queryGemini(brandName: string, url: string): Promise<AiPerception
 
 /**
  * Fetch AI perception from all three LLM families in parallel.
+ * Pass optional scraped context (page copy) to ground the analysis.
  * Each provider uses its own native SDK/API — gracefully degrades if a key is missing.
  */
 export async function fetchAiPerception(
   brandName: string,
-  url: string
+  url: string,
+  context?: string
 ): Promise<AiPerception> {
   const [openaiResult, anthropicResult, googleResult] = await Promise.all([
-    queryOpenAI(brandName, url),
-    queryAnthropic(brandName, url),
-    queryGemini(brandName, url),
+    queryOpenAI(brandName, url, context),
+    queryAnthropic(brandName, url, context),
+    queryGemini(brandName, url, context),
   ]);
 
   return {
