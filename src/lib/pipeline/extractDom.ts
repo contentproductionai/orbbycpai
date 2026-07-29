@@ -271,6 +271,7 @@ export async function extractDom(
     emit?.({ type: "status", step: 2, total: 6, message: "Scanning colors and fonts..." });
 
     // Scroll to trigger lazy-loaded content
+    // Wrapped in catch — some pages redirect mid-scroll causing a detached frame error
     await page.evaluate(async () => {
       await new Promise<void>((resolve) => {
         let totalHeight = 0;
@@ -285,6 +286,9 @@ export async function extractDom(
           }
         }, 120);
       });
+    }).catch((e: Error) => {
+      // Detached frame / navigation during scroll — non-fatal, continue with current state
+      console.warn("[extractDom] Scroll interrupted (non-fatal):", e.message);
     });
 
     await new Promise((r) => setTimeout(r, 1500));
@@ -356,10 +360,24 @@ export async function extractDom(
 
     console.log("[extractDom] Running extraction (function registered via evaluateOnNewDocument)...");
 
-    // Call the extraction function — no serialization, no tsx helpers
-    raw = await page.evaluate(() => {
-      return (window as unknown as { __orbExtract: () => Record<string, unknown> }).__orbExtract();
-    }) as Record<string, unknown>;
+    // Call the extraction function — wrapped to handle detached frame if page navigated
+    try {
+      raw = await page.evaluate(() => {
+        return (window as unknown as { __orbExtract: () => Record<string, unknown> }).__orbExtract();
+      }) as Record<string, unknown>;
+    } catch (evalErr: unknown) {
+      const msg = (evalErr instanceof Error) ? evalErr.message : String(evalErr);
+      if (msg.includes("detached Frame") || msg.includes("Execution context was destroyed") || msg.includes("Target closed")) {
+        // Page navigated mid-extraction — wait for new frame to settle and retry once
+        console.warn("[extractDom] Detached frame during extraction — waiting 3s and retrying...");
+        await new Promise((r) => setTimeout(r, 3000));
+        raw = await page.evaluate(() => {
+          return (window as unknown as { __orbExtract: () => Record<string, unknown> }).__orbExtract();
+        }) as Record<string, unknown>;
+      } else {
+        throw evalErr;
+      }
+    }
 
     console.log("[extractDom] Extraction complete");
 
