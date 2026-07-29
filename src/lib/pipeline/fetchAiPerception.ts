@@ -1,11 +1,14 @@
 /**
  * Orb AI Perception Module
- * Queries GPT-5 mini, Claude Haiku, and Gemini Flash in parallel to get
+ * Queries GPT-4o mini, Claude Haiku, and Gemini Flash in parallel to get
  * each model's perception of a brand based on its training data.
- * Returns a structured AiPerception object with summaries and sentiment scores.
+ *
+ * Uses native SDKs/APIs for each provider so it works in Railway production
+ * without depending on the Manus proxy.
  */
 
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 
 export interface AiPerceptionEntry {
   summary: string;
@@ -19,7 +22,8 @@ export interface AiPerception {
   google: AiPerceptionEntry;
 }
 
-const PERCEPTION_PROMPT = (brandName: string, url: string) => `You are analyzing how the brand "${brandName}" (${url}) is perceived in the market.
+const PERCEPTION_PROMPT = (brandName: string, url: string) =>
+  `You are analyzing how the brand "${brandName}" (${url}) is perceived in the market.
 
 Based on your training data and knowledge, provide:
 1. A 2-3 sentence summary of how this brand is perceived — its reputation, positioning, and what it's known for.
@@ -33,59 +37,112 @@ Return ONLY this JSON (no markdown, no explanation):
   "sentimentScore": 4
 }`;
 
+function parsePerceptionResponse(text: string): { summary: string; sentimentScore: number } {
+  try {
+    const match = text.match(/\{[\s\S]*\}/);
+    const jsonStr = match ? match[0] : text;
+    const parsed = JSON.parse(jsonStr) as { summary: string; sentimentScore: number };
+    return {
+      summary: parsed.summary || "No perception data available.",
+      sentimentScore: Math.min(5, Math.max(1, Math.round(parsed.sentimentScore || 3))),
+    };
+  } catch {
+    return { summary: "Perception data unavailable for this brand.", sentimentScore: 3 };
+  }
+}
+
+/** Query GPT-4o mini via OpenAI SDK (direct, no proxy) */
+async function queryOpenAI(brandName: string, url: string): Promise<AiPerceptionEntry> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.warn("[fetchAiPerception] OPENAI_API_KEY not set — skipping GPT");
+    return { summary: "OpenAI API key not configured.", sentimentScore: 3, model: "gpt-4o-mini" };
+  }
+  try {
+    // Use direct OpenAI endpoint — explicitly no baseURL override
+    const client = new OpenAI({ apiKey, baseURL: "https://api.openai.com/v1" });
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_tokens: 300,
+      temperature: 0.3,
+      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url) }],
+    });
+    const text = response.choices[0]?.message?.content?.trim() ?? "";
+    const parsed = parsePerceptionResponse(text);
+    return { ...parsed, model: "gpt-4o-mini" };
+  } catch (err) {
+    console.warn("[fetchAiPerception] OpenAI failed:", (err as Error).message);
+    return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gpt-4o-mini" };
+  }
+}
+
+/** Query Claude Haiku via Anthropic SDK (direct) */
+async function queryAnthropic(brandName: string, url: string): Promise<AiPerceptionEntry> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.warn("[fetchAiPerception] ANTHROPIC_API_KEY not set — skipping Claude");
+    return { summary: "Anthropic API key not configured.", sentimentScore: 3, model: "claude-haiku-4-5" };
+  }
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url) }],
+    });
+    const text =
+      response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
+    const parsed = parsePerceptionResponse(text);
+    return { ...parsed, model: "claude-haiku-4-5" };
+  } catch (err) {
+    console.warn("[fetchAiPerception] Anthropic failed:", (err as Error).message);
+    return { summary: "Perception data unavailable.", sentimentScore: 3, model: "claude-haiku-4-5" };
+  }
+}
+
+/** Query Gemini 2.0 Flash via REST API */
+async function queryGemini(brandName: string, url: string): Promise<AiPerceptionEntry> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("[fetchAiPerception] GEMINI_API_KEY not set — skipping Gemini");
+    return { summary: "Gemini API key not configured.", sentimentScore: 3, model: "gemini-2.0-flash" };
+  }
+  try {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const body = {
+      contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url) }] }],
+      generationConfig: { maxOutputTokens: 300, temperature: 0.3 },
+    };
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${await res.text()}`);
+    const data = await res.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+    const parsed = parsePerceptionResponse(text);
+    return { ...parsed, model: "gemini-2.0-flash" };
+  } catch (err) {
+    console.warn("[fetchAiPerception] Gemini failed:", (err as Error).message);
+    return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gemini-2.0-flash" };
+  }
+}
+
 /**
  * Fetch AI perception from all three LLM families in parallel.
- * Uses the Manus OpenAI-compatible proxy which routes to each provider.
+ * Each provider uses its own native SDK/API — gracefully degrades if a key is missing.
  */
 export async function fetchAiPerception(
   brandName: string,
   url: string
 ): Promise<AiPerception> {
-  // All three models are available via the Manus OpenAI-compatible proxy
-  const client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_API_BASE,
-  });
-
-  const prompt = PERCEPTION_PROMPT(brandName, url);
-
-  async function queryModel(
-    model: string,
-    label: "openai" | "anthropic" | "google"
-  ): Promise<AiPerceptionEntry> {
-    try {
-      const response = await client.chat.completions.create({
-        model,
-        max_tokens: 300,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-      });
-
-      const text = response.choices[0]?.message?.content?.trim() ?? "";
-      const match = text.match(/\{[\s\S]*\}/);
-      const jsonStr = match ? match[0] : text;
-
-      const parsed = JSON.parse(jsonStr) as { summary: string; sentimentScore: number };
-      return {
-        summary: parsed.summary || "No perception data available.",
-        sentimentScore: Math.min(5, Math.max(1, Math.round(parsed.sentimentScore || 3))),
-        model,
-      };
-    } catch (err) {
-      console.warn(`[fetchAiPerception] ${label} (${model}) failed:`, (err as Error).message);
-      return {
-        summary: "Perception data unavailable for this brand.",
-        sentimentScore: 3,
-        model,
-      };
-    }
-  }
-
-  // Fire all three in parallel
   const [openaiResult, anthropicResult, googleResult] = await Promise.all([
-    queryModel("gpt-5-mini", "openai"),
-    queryModel("claude-haiku-4-5", "anthropic"),
-    queryModel("gemini-3-flash-preview", "google"),
+    queryOpenAI(brandName, url),
+    queryAnthropic(brandName, url),
+    queryGemini(brandName, url),
   ]);
 
   return {
