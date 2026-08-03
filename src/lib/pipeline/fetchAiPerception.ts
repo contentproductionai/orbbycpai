@@ -160,39 +160,66 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
   }
   const geminiModel = "gemini-3-flash-preview";
   const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
-  try {
-    console.log("[fetchAiPerception] Calling Gemini:", { model: geminiModel, brandName });
-    const body = {
-      contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
-      generationConfig: { maxOutputTokens: 700, temperature: 0.4 },
-    };
-    const res = await fetch(geminiEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const errorBody = await res.text();
-      throw new Error(`Gemini HTTP ${res.status}: ${errorBody}`);
+  const body = {
+    contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
+    generationConfig: { maxOutputTokens: 700, temperature: 0.4 },
+  };
+
+  // Retry up to 3 times with exponential backoff — Gemini preview models return
+  // HTTP 503 under high demand, which is transient and usually resolves in 1-2s.
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 1500;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[fetchAiPerception] Calling Gemini (attempt ${attempt}/${MAX_RETRIES}):`, { model: geminiModel, brandName });
+      const res = await fetch(geminiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errorBody = await res.text();
+        const isRetryable = res.status === 503 || res.status === 429;
+        if (isRetryable && attempt < MAX_RETRIES) {
+          const delay = BASE_DELAY_MS * attempt;
+          console.warn(`[fetchAiPerception] Gemini ${res.status} on attempt ${attempt} — retrying in ${delay}ms`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+        throw new Error(`Gemini HTTP ${res.status}: ${errorBody}`);
+      }
+
+      const data = await res.json() as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+      console.log("[fetchAiPerception] Gemini raw response:", text.slice(0, 200));
+      const parsed = parsePerceptionResponse(text);
+      console.log("[fetchAiPerception] Gemini parsed score:", parsed.sentimentScore);
+      return { ...parsed, model: "gemini" };
+
+    } catch (err) {
+      const error = err as Error;
+      if (attempt < MAX_RETRIES && (error.message.includes("503") || error.message.includes("429"))) {
+        const delay = BASE_DELAY_MS * attempt;
+        console.warn(`[fetchAiPerception] Gemini error on attempt ${attempt} — retrying in ${delay}ms:`, error.message);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      console.error("[fetchAiPerception] Gemini FAILED after all retries:", {
+        message: error.message,
+        model: geminiModel,
+        url: geminiEndpoint.replace(apiKey, "***"),
+        stack: error.stack,
+      });
+      return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gemini" };
     }
-    const data = await res.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
-    console.log("[fetchAiPerception] Gemini raw response:", text.slice(0, 200));
-    const parsed = parsePerceptionResponse(text);
-    console.log("[fetchAiPerception] Gemini parsed score:", parsed.sentimentScore);
-    return { ...parsed, model: "gemini" };
-  } catch (err) {
-    const error = err as Error;
-    console.error("[fetchAiPerception] Gemini FAILED:", {
-      message: error.message,
-      model: geminiModel,
-      url: geminiEndpoint.replace(apiKey, "***"),
-      stack: error.stack,
-    });
-    return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gemini" };
   }
+
+  // Should never reach here, but TypeScript requires a return
+  return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gemini" };
 }
 
 /**
