@@ -127,9 +127,9 @@ export interface BrandProfile {
   };
   positioningSignal?: string;
   aiPerception?: {
-    openai: { summary: string; sentimentScore: number; model: string };
-    anthropic: { summary: string; sentimentScore: number; model: string };
-    google: { summary: string; sentimentScore: number; model: string };
+    openai: { dominantAssociations?: string[]; vocabularyTells?: string; positioningDelta?: string; categoryAnchor?: string; sentimentRationale?: string; summary?: string; sentimentScore: number; model: string };
+    anthropic: { dominantAssociations?: string[]; vocabularyTells?: string; positioningDelta?: string; categoryAnchor?: string; sentimentRationale?: string; summary?: string; sentimentScore: number; model: string };
+    google: { dominantAssociations?: string[]; vocabularyTells?: string; positioningDelta?: string; categoryAnchor?: string; sentimentRationale?: string; summary?: string; sentimentScore: number; model: string };
   };
   companyMetadata?: {
     foundedYear: string | null;
