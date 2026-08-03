@@ -387,6 +387,15 @@ function AiPerceptionTab({ perception }: { perception?: AiPerception }) {
       </div>
       {models.map(({ key, label, icon, color }) => {
         const entry = perception[key];
+        // Detect fallback/error strings stored from failed API calls
+        const UNAVAILABLE_STRINGS = [
+          "Perception data unavailable",
+          "Perception data unavailable for this company",
+          "API key not configured",
+          "No perception data available",
+        ];
+        const isUnavailable = !entry?.summary ||
+          UNAVAILABLE_STRINGS.some(s => entry.summary.startsWith(s));
         return (
           <Card key={key}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -394,11 +403,17 @@ function AiPerceptionTab({ perception }: { perception?: AiPerception }) {
                 <span style={{ fontSize: 18, color }}>{icon}</span>
                 <span style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>{label}</span>
               </div>
-              <SentimentBar score={entry.sentimentScore} />
+              {!isUnavailable && <SentimentBar score={entry.sentimentScore} />}
             </div>
-            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", lineHeight: 1.65, margin: 0 }}>
-              {entry.summary}
-            </p>
+            {isUnavailable ? (
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", lineHeight: 1.65, margin: 0, fontStyle: "italic" }}>
+                {label} was temporarily unavailable when this report was generated. Re-run the analysis to fetch a fresh response.
+              </p>
+            ) : (
+              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", lineHeight: 1.65, margin: 0 }}>
+                {entry.summary}
+              </p>
+            )}
           </Card>
         );
       })}
