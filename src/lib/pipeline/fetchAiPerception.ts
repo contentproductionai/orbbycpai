@@ -177,7 +177,19 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
   const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
   const body = {
     contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
-    generationConfig: { maxOutputTokens: 700, temperature: 0.4, responseMimeType: "application/json" },
+    generationConfig: {
+      maxOutputTokens: 1024,
+      temperature: 0.4,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "object",
+        properties: {
+          summary: { type: "string" },
+          sentimentScore: { type: "integer" },
+        },
+        required: ["summary", "sentimentScore"],
+      },
+    },
   };
 
   // Retry up to 3 times with exponential backoff — Gemini preview models return
