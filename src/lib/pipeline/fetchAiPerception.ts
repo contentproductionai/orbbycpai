@@ -158,7 +158,7 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
     });
     return { summary: "Gemini API key not configured.", sentimentScore: 3, model: "gemini" };
   }
-  const geminiModel = "gemini-2.5-pro";
+  const geminiModel = "gemini-2.5-flash";
   const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
   const body = {
     contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
