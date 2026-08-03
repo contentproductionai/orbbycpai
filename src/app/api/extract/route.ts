@@ -38,6 +38,9 @@ export const maxDuration = 180;
 const FREE_FULL_RUNS = 1;   // First run: full report including AI Perception
 const FREE_TOTAL_RUNS = 5;  // Runs 2-5: partial (Brand Report only). Run 6+: blocked.
 
+// ─── Admin accounts — always full access, no limits ──────────────────────────
+const ADMIN_EMAILS = ["tyler@yanaapp.com"];
+
 function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
@@ -123,11 +126,14 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── Freemium check ───────────────────────────────────────────────────────
+  const userEmail = (session?.user as { email?: string } | undefined)?.email ?? "";
+  const isAdmin = ADMIN_EMAILS.includes(userEmail.toLowerCase());
+
   const sub = await getUserSubscription(userId);
-  const isPaid = sub.tier !== "free";
+  const isPaid = isAdmin || sub.tier !== "free";
   const runsUsed = sub.generationsUsed ?? 0;
 
-  // Paid users: unlimited. Free users: block at run 6+
+  // Admin and paid users: unlimited. Free users: block at run 6+
   if (!isPaid && runsUsed >= FREE_TOTAL_RUNS) {
     return new Response(
       JSON.stringify({
@@ -141,7 +147,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Determine access tier for this run
-  // Run 1 (index 0) = full. Runs 2-5 (index 1-4) = partial.
+  // Admin/paid: always full. Free run 1: full. Free runs 2-5: partial.
   const accessTier: "full" | "partial" =
     isPaid || runsUsed < FREE_FULL_RUNS ? "full" : "partial";
 

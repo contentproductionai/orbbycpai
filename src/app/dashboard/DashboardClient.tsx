@@ -863,11 +863,14 @@ function NewAnalysisPanel({ onComplete, runsUsed, runsLimit, tier }: { onComplet
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
+const ADMIN_EMAILS = ["tyler@yanaapp.com"];
+
 export default function DashboardClient({ user, generations: initialGenerations, stats }: Props) {
   const [generations, setGenerations] = useState(initialGenerations);
   const [selectedId, setSelectedId] = useState<string | null>(initialGenerations[0]?.id ?? null);
   const [activeTab, setActiveTab] = useState<"report" | "perception" | "comparison">("report");
   const [runsUsed, setRunsUsed] = useState(stats.generationsUsed);
+  const isAdmin = ADMIN_EMAILS.includes((user.email ?? "").toLowerCase());
 
   const selectedGen = generations.find(g => g.id === selectedId);
   const selectedProfile = selectedGen?.brandProfile as BrandProfile | undefined;
@@ -958,7 +961,7 @@ export default function DashboardClient({ user, generations: initialGenerations,
             onComplete={handleNewAnalysis}
             runsUsed={runsUsed}
             runsLimit={stats.generationsLimit}
-            tier={stats.tier}
+            tier={isAdmin ? "admin" : stats.tier}
           />
 
           {/* History */}
@@ -1078,12 +1081,12 @@ export default function DashboardClient({ user, generations: initialGenerations,
               {activeTab === "perception" && (
                 selectedHasPerception
                   ? <AiPerceptionTab perception={selectedProfile!.aiPerception} onRerun={handleRerun} />
-                  : <UpgradeGate feature="AI Perception" />
+                  : isAdmin ? <AiPerceptionTab perception={selectedProfile?.aiPerception} onRerun={handleRerun} /> : <UpgradeGate feature="AI Perception" />
               )}
               {activeTab === "comparison" && (
                 selectedHasPerception
                   ? <ComparisonTab primaryProfile={selectedProfile!} />
-                  : <UpgradeGate feature="Competitor Comparison" />
+                  : isAdmin ? <ComparisonTab primaryProfile={selectedProfile!} /> : <UpgradeGate feature="Competitor Comparison" />
               )}
             </>
           )}
