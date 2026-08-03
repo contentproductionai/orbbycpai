@@ -361,7 +361,7 @@ function BrandReportTab({ profile }: { profile: BrandProfile }) {
 
 // ─── AI Perception Tab ────────────────────────────────────────────────────────
 
-function AiPerceptionTab({ perception }: { perception?: AiPerception }) {
+function AiPerceptionTab({ perception, onRerun }: { perception?: AiPerception; onRerun?: () => void }) {
   if (!perception) {
     return (
       <Card>
@@ -406,9 +406,29 @@ function AiPerceptionTab({ perception }: { perception?: AiPerception }) {
               {!isUnavailable && <SentimentBar score={entry.sentimentScore} />}
             </div>
             {isUnavailable ? (
-              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", lineHeight: 1.65, margin: 0, fontStyle: "italic" }}>
-                {label} was temporarily unavailable when this report was generated. Re-run the analysis to fetch a fresh response.
-              </p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", lineHeight: 1.65, margin: 0, fontStyle: "italic", flex: 1 }}>
+                  {label} was temporarily unavailable when this report was generated.
+                </p>
+                {onRerun && (
+                  <button
+                    onClick={onRerun}
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 12, fontWeight: 600,
+                      color: "#00d4aa",
+                      background: "rgba(0,212,170,0.08)",
+                      border: "1px solid rgba(0,212,170,0.25)",
+                      borderRadius: 6,
+                      padding: "6px 12px",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ↻ Re-run analysis
+                  </button>
+                )}
+              </div>
             ) : (
               <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", lineHeight: 1.65, margin: 0 }}>
                 {entry.summary}
@@ -806,6 +826,41 @@ export default function DashboardClient({ user, generations: initialGenerations,
     selectedProfile.aiPerception.openai?.summary &&
     selectedProfile.aiPerception.anthropic?.summary);
 
+  // Re-run the analysis for the currently selected generation's URL
+  const handleRerun = async () => {
+    const url = selectedGen?.brandUrl;
+    if (!url) return;
+    const res = await fetch("/api/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok || !res.body) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const processChunk = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === "complete") {
+              handleNewAnalysis(event.generationId, event.brandProfile, event.accessTier || "full");
+              return;
+            }
+          } catch {}
+        }
+      }
+    };
+    processChunk().catch(() => {});
+  };
+
   const handleNewAnalysis = (generationId: string, profile: BrandProfile, accessTier: string) => {
     const newGen: Generation = {
       id: generationId,
@@ -972,7 +1027,7 @@ export default function DashboardClient({ user, generations: initialGenerations,
               {activeTab === "report" && <BrandReportTab profile={selectedProfile} />}
               {activeTab === "perception" && (
                 selectedHasPerception
-                  ? <AiPerceptionTab perception={selectedProfile!.aiPerception} />
+                  ? <AiPerceptionTab perception={selectedProfile!.aiPerception} onRerun={handleRerun} />
                   : <UpgradeGate feature="AI Perception" />
               )}
               {activeTab === "comparison" && (
