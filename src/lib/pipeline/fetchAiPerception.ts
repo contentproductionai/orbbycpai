@@ -10,6 +10,16 @@
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 
+// ── Startup diagnostic ────────────────────────────────────────────────────────
+// Logged once at module load time so Railway boot logs show whether env vars
+// are present before any request is made.
+console.log("[fetchAiPerception] startup env check:", {
+  OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
+  OPENAI_KEY: !!process.env.OPENAI_KEY,
+  ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+  GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
+});
+
 export interface AiPerceptionEntry {
   summary: string;
   sentimentScore: number; // 1-5 scale
@@ -25,6 +35,10 @@ export interface AiPerception {
 /**
  * Build the perception prompt. Includes scraped context so models can
  * reason from actual site content rather than just memory.
+ *
+ * NOTE: The sentimentScore field intentionally uses a descriptive instruction
+ * rather than an example number — models were echoing the example value
+ * verbatim, producing identical scores across all companies.
  */
 const PERCEPTION_PROMPT = (brandName: string, url: string, context?: string) => {
   const contextBlock = context
@@ -45,7 +59,7 @@ Be direct and specific. Do not hedge excessively — make your best assessment b
 Return ONLY this JSON object (no markdown, no explanation, no code fences):
 {
   "summary": "4-6 sentence analysis covering what the company does, its positioning, key associations, and overall sentiment",
-  "sentimentScore": 4
+  "sentimentScore": <integer from 1 to 5 reflecting your genuine assessment: 1=very negative, 2=negative, 3=neutral, 4=positive, 5=very positive>
 }`;
 };
 
@@ -68,23 +82,36 @@ async function queryOpenAI(brandName: string, url: string, context?: string): Pr
   // Support both OPENAI_API_KEY and OPENAI_KEY as fallback
   const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY;
   if (!apiKey) {
-    console.warn("[fetchAiPerception] OPENAI_API_KEY not set — skipping ChatGPT");
+    console.error("[fetchAiPerception] ChatGPT SKIPPED — OPENAI_API_KEY not set in environment.", {
+      availableKeys: Object.keys(process.env).filter((k) => k.includes("OPENAI")),
+    });
     return { summary: "OpenAI API key not configured.", sentimentScore: 3, model: "chatgpt" };
   }
+  const chatgptModel = "gpt-4o-mini";
+  const chatgptUrl = "https://api.openai.com/v1/chat/completions";
   try {
+    console.log("[fetchAiPerception] Calling ChatGPT:", { model: chatgptModel, brandName });
     // Always use direct OpenAI endpoint — never the Manus proxy
     const client = new OpenAI({ apiKey, baseURL: "https://api.openai.com/v1" });
     const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: chatgptModel,
       max_tokens: 700,
       temperature: 0.4,
       messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url, context) }],
     });
     const text = response.choices[0]?.message?.content?.trim() ?? "";
+    console.log("[fetchAiPerception] ChatGPT raw response:", text.slice(0, 200));
     const parsed = parsePerceptionResponse(text);
+    console.log("[fetchAiPerception] ChatGPT parsed score:", parsed.sentimentScore);
     return { ...parsed, model: "chatgpt" };
   } catch (err) {
-    console.warn("[fetchAiPerception] OpenAI failed:", (err as Error).message);
+    const error = err as Error;
+    console.error("[fetchAiPerception] ChatGPT FAILED:", {
+      message: error.message,
+      model: chatgptModel,
+      url: chatgptUrl,
+      stack: error.stack,
+    });
     return { summary: "Perception data unavailable.", sentimentScore: 3, model: "chatgpt" };
   }
 }
@@ -93,22 +120,31 @@ async function queryOpenAI(brandName: string, url: string, context?: string): Pr
 async function queryAnthropic(brandName: string, url: string, context?: string): Promise<AiPerceptionEntry> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.warn("[fetchAiPerception] ANTHROPIC_API_KEY not set — skipping Claude");
+    console.error("[fetchAiPerception] Claude SKIPPED — ANTHROPIC_API_KEY not set in environment.");
     return { summary: "Anthropic API key not configured.", sentimentScore: 3, model: "claude" };
   }
+  const claudeModel = "claude-haiku-4-5-20251001";
   try {
+    console.log("[fetchAiPerception] Calling Claude:", { model: claudeModel, brandName });
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: claudeModel,
       max_tokens: 700,
       messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url, context) }],
     });
     const text =
       response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
+    console.log("[fetchAiPerception] Claude raw response:", text.slice(0, 200));
     const parsed = parsePerceptionResponse(text);
+    console.log("[fetchAiPerception] Claude parsed score:", parsed.sentimentScore);
     return { ...parsed, model: "claude" };
   } catch (err) {
-    console.warn("[fetchAiPerception] Anthropic failed:", (err as Error).message);
+    const error = err as Error;
+    console.error("[fetchAiPerception] Claude FAILED:", {
+      message: error.message,
+      model: claudeModel,
+      stack: error.stack,
+    });
     return { summary: "Perception data unavailable.", sentimentScore: 3, model: "claude" };
   }
 }
@@ -117,30 +153,44 @@ async function queryAnthropic(brandName: string, url: string, context?: string):
 async function queryGemini(brandName: string, url: string, context?: string): Promise<AiPerceptionEntry> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn("[fetchAiPerception] GEMINI_API_KEY not set — skipping Gemini");
+    console.error("[fetchAiPerception] Gemini SKIPPED — GEMINI_API_KEY not set in environment.", {
+      availableKeys: Object.keys(process.env).filter((k) => k.includes("GEMINI") || k.includes("GOOGLE")),
+    });
     return { summary: "Gemini API key not configured.", sentimentScore: 3, model: "gemini" };
   }
+  const geminiModel = "gemini-3-flash-preview";
+  const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
   try {
-    // gemini-3-flash-preview is the current working model for this key
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    console.log("[fetchAiPerception] Calling Gemini:", { model: geminiModel, brandName });
     const body = {
       contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
       generationConfig: { maxOutputTokens: 700, temperature: 0.4 },
     };
-    const res = await fetch(endpoint, {
+    const res = await fetch(geminiEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${await res.text()}`);
+    if (!res.ok) {
+      const errorBody = await res.text();
+      throw new Error(`Gemini HTTP ${res.status}: ${errorBody}`);
+    }
     const data = await res.json() as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+    console.log("[fetchAiPerception] Gemini raw response:", text.slice(0, 200));
     const parsed = parsePerceptionResponse(text);
+    console.log("[fetchAiPerception] Gemini parsed score:", parsed.sentimentScore);
     return { ...parsed, model: "gemini" };
   } catch (err) {
-    console.warn("[fetchAiPerception] Gemini failed:", (err as Error).message);
+    const error = err as Error;
+    console.error("[fetchAiPerception] Gemini FAILED:", {
+      message: error.message,
+      model: geminiModel,
+      url: geminiEndpoint.replace(apiKey, "***"),
+      stack: error.stack,
+    });
     return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gemini" };
   }
 }
@@ -155,11 +205,18 @@ export async function fetchAiPerception(
   url: string,
   context?: string
 ): Promise<AiPerception> {
+  console.log("[fetchAiPerception] Starting parallel perception fetch for:", brandName);
   const [openaiResult, anthropicResult, googleResult] = await Promise.all([
     queryOpenAI(brandName, url, context),
     queryAnthropic(brandName, url, context),
     queryGemini(brandName, url, context),
   ]);
+
+  console.log("[fetchAiPerception] All three complete:", {
+    chatgpt: openaiResult.sentimentScore,
+    claude: anthropicResult.sentimentScore,
+    gemini: googleResult.sentimentScore,
+  });
 
   return {
     openai: openaiResult,
