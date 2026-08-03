@@ -178,7 +178,7 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
   const body = {
     contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
     generationConfig: {
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
       temperature: 0.4,
       responseMimeType: "application/json",
       responseSchema: {
