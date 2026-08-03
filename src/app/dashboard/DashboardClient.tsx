@@ -6,7 +6,18 @@ import Image from "next/image";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ColorSample { hex: string; count: number; contexts?: string[] }
-interface AiPerceptionEntry { summary: string; sentimentScore: number; model: string }
+interface AiPerceptionEntry {
+  // New 5-field perception schema
+  dominantAssociations?: string[];
+  vocabularyTells?: string;
+  positioningDelta?: string;
+  categoryAnchor?: string;
+  sentimentRationale?: string;
+  // Legacy field (kept for backward compat with old DB rows)
+  summary?: string;
+  sentimentScore: number;
+  model: string;
+}
 interface AiPerception {
   openai: AiPerceptionEntry;
   anthropic: AiPerceptionEntry;
@@ -394,8 +405,10 @@ function AiPerceptionTab({ perception, onRerun }: { perception?: AiPerception; o
           "API key not configured",
           "No perception data available",
         ];
-        const isUnavailable = !entry?.summary ||
-          UNAVAILABLE_STRINGS.some(s => entry.summary.startsWith(s));
+        // New schema: check dominantAssociations; legacy schema: check summary
+        const hasNewSchema = Array.isArray(entry?.dominantAssociations) && entry.dominantAssociations.length > 0;
+        const hasLegacySummary = !!entry?.summary && !UNAVAILABLE_STRINGS.some(s => entry.summary!.startsWith(s));
+        const isUnavailable = !hasNewSchema && !hasLegacySummary;
         return (
           <Card key={key}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -404,6 +417,9 @@ function AiPerceptionTab({ perception, onRerun }: { perception?: AiPerception; o
                 <span style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>{label}</span>
               </div>
               {!isUnavailable && <SentimentBar score={entry.sentimentScore} />}
+              {!isUnavailable && entry.sentimentRationale && (
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontStyle: "italic", maxWidth: 280, textAlign: "right", lineHeight: 1.4 }}>{entry.sentimentRationale}</span>
+              )}
             </div>
             {isUnavailable ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -429,9 +445,43 @@ function AiPerceptionTab({ perception, onRerun }: { perception?: AiPerception; o
                   </button>
                 )}
               </div>
+            ) : hasNewSchema ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Dominant Associations */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>Dominant Associations</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {entry.dominantAssociations!.map((tag, i) => (
+                      <span key={i} style={{ fontSize: 12, fontWeight: 500, color: color, background: `${color}18`, border: `1px solid ${color}40`, borderRadius: 4, padding: "3px 8px" }}>{tag}</span>
+                    ))}
+                  </div>
+                </div>
+                {/* Vocabulary Tells */}
+                {entry.vocabularyTells && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>Vocabulary Tells</div>
+                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, margin: 0 }}>{entry.vocabularyTells}</p>
+                  </div>
+                )}
+                {/* Positioning Delta */}
+                {entry.positioningDelta && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>Positioning Delta</div>
+                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, margin: 0 }}>{entry.positioningDelta}</p>
+                  </div>
+                )}
+                {/* Category Anchor */}
+                {entry.categoryAnchor && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>Category Anchor</div>
+                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, margin: 0 }}>{entry.categoryAnchor}</p>
+                  </div>
+                )}
+              </div>
             ) : (
-              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", lineHeight: 1.65, margin: 0 }}>
-                {entry.summary}
+              // Legacy: old DB rows with summary field
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", lineHeight: 1.65, margin: 0, fontStyle: "italic" }}>
+                {entry.summary || "Legacy result — re-run for updated analysis."}
               </p>
             )}
           </Card>

@@ -21,8 +21,12 @@ console.log("[fetchAiPerception] startup env check:", {
 });
 
 export interface AiPerceptionEntry {
-  summary: string;
-  sentimentScore: number; // 1-5 scale
+  dominantAssociations: string[];   // 3-5 short concept tags
+  vocabularyTells: string;          // language type + examples
+  positioningDelta: string;         // over/under-index vs self-description
+  categoryAnchor: string;           // where model places them in category
+  sentimentScore: number;           // 1-5 scale
+  sentimentRationale: string;       // rationale tied to specific associations
   model: string;
 }
 
@@ -33,92 +37,97 @@ export interface AiPerception {
 }
 
 /**
- * Build the perception prompt. Includes scraped context so models can
- * reason from actual site content rather than just memory.
+ * Build the perception prompt.
  *
- * NOTE: The sentimentScore field intentionally uses a descriptive instruction
- * rather than an example number — models were echoing the example value
- * verbatim, producing identical scores across all companies.
+ * Framing: self-report task (not research task) — models reflect on their own
+ * training data rather than performing generic analysis. Each model is given
+ * explicit permission to differ from other models.
  */
-const PERCEPTION_PROMPT = (brandName: string, url: string, context?: string) => {
+const PERCEPTION_PROMPT = (modelName: string, brandName: string, url: string, context?: string) => {
   const contextBlock = context
-    ? `\n\nHere is content scraped directly from their website to inform your analysis:\n---\n${context.slice(0, 1500)}\n---\n`
+    ? `\n\nHere is content scraped directly from their website — use this to inform your positioning delta, not your associations (associations should come from your training data, not their marketing copy):\n---\n${context.slice(0, 1500)}\n---\n`
     : "";
 
-  return `You are a senior analyst specializing in brand and company intelligence. Analyze how the company "${brandName}" (${url}) is perceived — drawing on both your training data and the website content provided below.${contextBlock}
+  return `You are ${modelName}. This is not a research task. This is a self-report task. I am asking you to reflect on how ${brandName} (${url}) exists in your training data — what associations you have formed, what vocabulary you naturally reach for, and how your perception of them compares to how they present themselves. Your perception may differ from other models' perceptions of the same brand, and that difference is exactly what we want to surface. Do not aim for neutral consensus — report your specific view.${contextBlock}
 
-Provide a substantive analysis covering:
-- What this company does and what it is known for
-- How it positions itself in its market and who it serves
-- Key brand associations, values, and qualities
-- How AI systems and the broader market are likely to perceive it
-- Overall sentiment and why
+Before responding, self-check: does every field describe how YOU think about this company, or does any field describe what this company does? If the latter, rewrite that field before responding.
 
-Be direct and specific. Do not hedge excessively — make your best assessment based on available evidence.
+Return ONLY the following JSON object — no markdown, no explanation, no code fences:
 
-Return ONLY this JSON object (no markdown, no explanation, no code fences):
 {
-  "summary": "4-6 sentence analysis covering what the company does, its positioning, key associations, and overall sentiment",
-  "sentimentScore": <integer from 1 to 5 reflecting your genuine assessment: 1=very negative, 2=negative, 3=neutral, 4=positive, 5=very positive>
+  "dominantAssociations": [
+    "3-5 short concept tags. These are mental shortcuts, not descriptions. Bad: 'workspace platform' or 'productivity tool.' Good: 'documentation-first,' 'power-user learning curve,' 'AI feature-add on legacy product.' If you find yourself writing what the company does, stop and rewrite."
+  ],
+  "vocabularyTells": "1-2 sentences. What type of language dominates your training data about this company? Product-mechanic, brand-emotional, category-defining, or competitor-comparison language? Give 2-3 specific example words or phrases you naturally reach for.",
+  "positioningDelta": "2-3 sentences. Compare how you naturally describe this company to how they describe themselves on their website. Where do you over-index vs their marketing? Where do you under-index? Be specific — name the gap.",
+  "categoryAnchor": "1-2 sentences. Where do you place this company in its category? Leader / challenger / alternative / category-defining? Name 2-3 other companies in the same mental cluster for you.",
+  "sentimentScore": <integer 1-5: 1=very negative, 2=negative, 3=neutral, 4=positive, 5=very positive>,
+  "sentimentRationale": "1-2 sentences explaining the score in terms of the specific associations above — not generic positive/negative sentiment. Tie the score to what you actually associate with this brand."
 }`;
 };
 
-function parsePerceptionResponse(text: string): { summary: string; sentimentScore: number } {
+const FALLBACK_ENTRY = (model: string): AiPerceptionEntry => ({
+  dominantAssociations: [],
+  vocabularyTells: "",
+  positioningDelta: "",
+  categoryAnchor: "",
+  sentimentScore: 3,
+  sentimentRationale: "",
+  model,
+});
+
+function parsePerceptionResponse(text: string, model: string): AiPerceptionEntry {
   try {
-    // Try direct JSON parse first (works when responseMimeType: application/json is set)
     const match = text.match(/\{[\s\S]*\}/);
     const jsonStr = match ? match[0] : text;
-    const parsed = JSON.parse(jsonStr) as { summary: string; sentimentScore: number };
-    if (parsed.summary && typeof parsed.sentimentScore === "number") {
-      return {
-        summary: parsed.summary,
-        sentimentScore: Math.min(5, Math.max(1, Math.round(parsed.sentimentScore))),
-      };
-    }
-    // Fallback: extract score from prose if JSON has no sentimentScore
-    const scoreMatch = text.match(/\b([1-5])(?:\/5|\s*out of\s*5)?\b/);
-    const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 3;
+    const parsed = JSON.parse(jsonStr) as Partial<AiPerceptionEntry>;
+
+    // Validate required fields are present and non-empty
+    const associations = Array.isArray(parsed.dominantAssociations) ? parsed.dominantAssociations : [];
+    const sentimentScore = typeof parsed.sentimentScore === "number"
+      ? Math.min(5, Math.max(1, Math.round(parsed.sentimentScore)))
+      : 3;
+
     return {
-      summary: parsed.summary || text.slice(0, 600),
-      sentimentScore: Math.min(5, Math.max(1, score)),
+      dominantAssociations: associations,
+      vocabularyTells: parsed.vocabularyTells || "",
+      positioningDelta: parsed.positioningDelta || "",
+      categoryAnchor: parsed.categoryAnchor || "",
+      sentimentScore,
+      sentimentRationale: parsed.sentimentRationale || "",
+      model,
     };
   } catch {
-    // Last resort: try to extract a score from raw prose
-    const scoreMatch = text.match(/\b([1-5])(?:\/5|\s*out of\s*5)?\b/);
-    const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 3;
-    // Use the raw text as summary if it looks substantive
-    const summary = text.length > 50 ? text.slice(0, 600) : "Perception data unavailable for this company.";
-    return { summary, sentimentScore: Math.min(5, Math.max(1, score)) };
+    console.error("[fetchAiPerception] JSON parse failed, raw text:", text.slice(0, 300));
+    return FALLBACK_ENTRY(model);
   }
 }
 
 /** Query ChatGPT via OpenAI SDK (direct, no proxy) */
 async function queryOpenAI(brandName: string, url: string, context?: string): Promise<AiPerceptionEntry> {
-  // Support both OPENAI_API_KEY and OPENAI_KEY as fallback
   const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY;
   if (!apiKey) {
     console.error("[fetchAiPerception] ChatGPT SKIPPED — OPENAI_API_KEY not set in environment.", {
       availableKeys: Object.keys(process.env).filter((k) => k.includes("OPENAI")),
     });
-    return { summary: "OpenAI API key not configured.", sentimentScore: 3, model: "chatgpt" };
+    return FALLBACK_ENTRY("chatgpt");
   }
   const chatgptModel = "gpt-4o-mini";
   const chatgptUrl = "https://api.openai.com/v1/chat/completions";
   try {
     console.log("[fetchAiPerception] Calling ChatGPT:", { model: chatgptModel, brandName });
-    // Always use direct OpenAI endpoint — never the Manus proxy
     const client = new OpenAI({ apiKey, baseURL: "https://api.openai.com/v1" });
     const response = await client.chat.completions.create({
       model: chatgptModel,
-      max_tokens: 700,
+      max_tokens: 1000,
       temperature: 0.4,
-      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url, context) }],
+      messages: [{ role: "user", content: PERCEPTION_PROMPT("ChatGPT", brandName, url, context) }],
     });
     const text = response.choices[0]?.message?.content?.trim() ?? "";
     console.log("[fetchAiPerception] ChatGPT raw response:", text.slice(0, 200));
-    const parsed = parsePerceptionResponse(text);
+    const parsed = parsePerceptionResponse(text, "chatgpt");
     console.log("[fetchAiPerception] ChatGPT parsed score:", parsed.sentimentScore);
-    return { ...parsed, model: "chatgpt" };
+    return parsed;
   } catch (err) {
     const error = err as Error;
     console.error("[fetchAiPerception] ChatGPT FAILED:", {
@@ -127,7 +136,7 @@ async function queryOpenAI(brandName: string, url: string, context?: string): Pr
       url: chatgptUrl,
       stack: error.stack,
     });
-    return { summary: "Perception data unavailable.", sentimentScore: 3, model: "chatgpt" };
+    return FALLBACK_ENTRY("chatgpt");
   }
 }
 
@@ -136,7 +145,7 @@ async function queryAnthropic(brandName: string, url: string, context?: string):
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error("[fetchAiPerception] Claude SKIPPED — ANTHROPIC_API_KEY not set in environment.");
-    return { summary: "Anthropic API key not configured.", sentimentScore: 3, model: "claude" };
+    return FALLBACK_ENTRY("claude");
   }
   const claudeModel = "claude-haiku-4-5-20251001";
   try {
@@ -144,15 +153,15 @@ async function queryAnthropic(brandName: string, url: string, context?: string):
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: claudeModel,
-      max_tokens: 700,
-      messages: [{ role: "user", content: PERCEPTION_PROMPT(brandName, url, context) }],
+      max_tokens: 1000,
+      messages: [{ role: "user", content: PERCEPTION_PROMPT("Claude", brandName, url, context) }],
     });
     const text =
       response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
     console.log("[fetchAiPerception] Claude raw response:", text.slice(0, 200));
-    const parsed = parsePerceptionResponse(text);
+    const parsed = parsePerceptionResponse(text, "claude");
     console.log("[fetchAiPerception] Claude parsed score:", parsed.sentimentScore);
-    return { ...parsed, model: "claude" };
+    return parsed;
   } catch (err) {
     const error = err as Error;
     console.error("[fetchAiPerception] Claude FAILED:", {
@@ -160,7 +169,7 @@ async function queryAnthropic(brandName: string, url: string, context?: string):
       model: claudeModel,
       stack: error.stack,
     });
-    return { summary: "Perception data unavailable.", sentimentScore: 3, model: "claude" };
+    return FALLBACK_ENTRY("claude");
   }
 }
 
@@ -171,12 +180,12 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
     console.error("[fetchAiPerception] Gemini SKIPPED — GEMINI_API_KEY not set in environment.", {
       availableKeys: Object.keys(process.env).filter((k) => k.includes("GEMINI") || k.includes("GOOGLE")),
     });
-    return { summary: "Gemini API key not configured.", sentimentScore: 3, model: "gemini" };
+    return FALLBACK_ENTRY("gemini");
   }
   const geminiModel = "gemini-3.6-flash";
   const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
   const body = {
-    contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
+    contents: [{ parts: [{ text: PERCEPTION_PROMPT("Gemini", brandName, url, context) }] }],
     generationConfig: {
       maxOutputTokens: 2048,
       temperature: 0.4,
@@ -184,16 +193,20 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
       responseSchema: {
         type: "object",
         properties: {
-          summary: { type: "string" },
+          dominantAssociations: { type: "array", items: { type: "string" } },
+          vocabularyTells: { type: "string" },
+          positioningDelta: { type: "string" },
+          categoryAnchor: { type: "string" },
           sentimentScore: { type: "integer" },
+          sentimentRationale: { type: "string" },
         },
-        required: ["summary", "sentimentScore"],
+        required: ["dominantAssociations", "vocabularyTells", "positioningDelta", "categoryAnchor", "sentimentScore", "sentimentRationale"],
       },
     },
   };
 
-  // Retry up to 3 times with exponential backoff — Gemini preview models return
-  // HTTP 503 under high demand, which is transient and usually resolves in 1-2s.
+  // Retry up to 3 times with exponential backoff — Gemini returns HTTP 503
+  // under high demand, which is transient and usually resolves in 1-2s.
   const MAX_RETRIES = 3;
   const BASE_DELAY_MS = 1500;
 
@@ -223,9 +236,9 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
       };
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
       console.log("[fetchAiPerception] Gemini raw response:", text.slice(0, 200));
-      const parsed = parsePerceptionResponse(text);
+      const parsed = parsePerceptionResponse(text, "gemini");
       console.log("[fetchAiPerception] Gemini parsed score:", parsed.sentimentScore);
-      return { ...parsed, model: "gemini" };
+      return parsed;
 
     } catch (err) {
       const error = err as Error;
@@ -241,12 +254,11 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
         url: geminiEndpoint.replace(apiKey, "***"),
         stack: error.stack,
       });
-      return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gemini" };
+      return FALLBACK_ENTRY("gemini");
     }
   }
 
-  // Should never reach here, but TypeScript requires a return
-  return { summary: "Perception data unavailable.", sentimentScore: 3, model: "gemini" };
+  return FALLBACK_ENTRY("gemini");
 }
 
 /**
