@@ -65,15 +65,30 @@ Return ONLY this JSON object (no markdown, no explanation, no code fences):
 
 function parsePerceptionResponse(text: string): { summary: string; sentimentScore: number } {
   try {
+    // Try direct JSON parse first (works when responseMimeType: application/json is set)
     const match = text.match(/\{[\s\S]*\}/);
     const jsonStr = match ? match[0] : text;
     const parsed = JSON.parse(jsonStr) as { summary: string; sentimentScore: number };
+    if (parsed.summary && typeof parsed.sentimentScore === "number") {
+      return {
+        summary: parsed.summary,
+        sentimentScore: Math.min(5, Math.max(1, Math.round(parsed.sentimentScore))),
+      };
+    }
+    // Fallback: extract score from prose if JSON has no sentimentScore
+    const scoreMatch = text.match(/\b([1-5])(?:\/5|\s*out of\s*5)?\b/);
+    const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 3;
     return {
-      summary: parsed.summary || "No perception data available.",
-      sentimentScore: Math.min(5, Math.max(1, Math.round(parsed.sentimentScore || 3))),
+      summary: parsed.summary || text.slice(0, 600),
+      sentimentScore: Math.min(5, Math.max(1, score)),
     };
   } catch {
-    return { summary: "Perception data unavailable for this company.", sentimentScore: 3 };
+    // Last resort: try to extract a score from raw prose
+    const scoreMatch = text.match(/\b([1-5])(?:\/5|\s*out of\s*5)?\b/);
+    const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 3;
+    // Use the raw text as summary if it looks substantive
+    const summary = text.length > 50 ? text.slice(0, 600) : "Perception data unavailable for this company.";
+    return { summary, sentimentScore: Math.min(5, Math.max(1, score)) };
   }
 }
 
@@ -162,7 +177,7 @@ async function queryGemini(brandName: string, url: string, context?: string): Pr
   const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
   const body = {
     contents: [{ parts: [{ text: PERCEPTION_PROMPT(brandName, url, context) }] }],
-    generationConfig: { maxOutputTokens: 700, temperature: 0.4 },
+    generationConfig: { maxOutputTokens: 700, temperature: 0.4, responseMimeType: "application/json" },
   };
 
   // Retry up to 3 times with exponential backoff — Gemini preview models return
