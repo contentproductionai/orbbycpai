@@ -502,9 +502,35 @@ function AiPerceptionTab({ perception, onRerun }: { perception?: AiPerception; o
 // ─── Competitor Comparison Tab ────────────────────────────────────────────────
 
 function ComparisonTab({ primaryProfile }: { primaryProfile: BrandProfile }) {
-  const [competitorUrls, setCompetitorUrls] = useState<string[]>(["", "", ""]);
+  const primaryUrl = primaryProfile.meta?.url || "";
+  const storageKey = `orb_comparison_${primaryUrl}`;
+
+  // Hydrate from localStorage on mount so results survive tab switches
+  const [competitorUrls, setCompetitorUrls] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as { competitorUrls?: string[] };
+        if (Array.isArray(parsed.competitorUrls)) {
+          const padded = [...parsed.competitorUrls];
+          while (padded.length < 3) padded.push("");
+          return padded.slice(0, 3);
+        }
+      }
+    } catch {}
+    return ["", "", ""];
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ComparisonResult | null>(null);
+  const [result, setResult] = useState<ComparisonResult | null>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as { result?: ComparisonResult };
+        return parsed.result ?? null;
+      }
+    } catch {}
+    return null;
+  });
   const [error, setError] = useState("");
 
   const handleRunComparison = async () => {
@@ -519,13 +545,21 @@ function ComparisonTab({ primaryProfile }: { primaryProfile: BrandProfile }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          primaryUrl: primaryProfile.meta?.url,
+          primaryUrl: primaryUrl,
           competitorUrls: validUrls,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Comparison failed");
-      setResult(data.comparison);
+      const comparison = data.comparison as ComparisonResult;
+      setResult(comparison);
+      // Persist result + competitor URLs so they survive tab navigation
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({
+          competitorUrls: validUrls,
+          result: comparison,
+        }));
+      } catch {}
     } catch (err) {
       setError((err as Error).message);
     } finally {
