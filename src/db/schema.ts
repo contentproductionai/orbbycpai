@@ -146,7 +146,9 @@ export const generations = pgTable(
 
 // ─── Competitor Comparisons ─────────────────────────────────────────────────
 // Stores comparison runs: one primary brand vs up to 3 competitors.
-// uspStatements JSONB shape: { [competitorDomain]: "Why primary wins..." }
+// competitivePositions JSONB shape: { [competitorDomain]: CompetitivePosition }
+// TECH_DEBT: uspStatements column renamed conceptually; DB column kept as usp_statements
+// to avoid a migration — the column now stores CompetitivePosition objects, not strings.
 export const competitorComparisons = pgTable(
   "competitor_comparisons",
   {
@@ -156,7 +158,7 @@ export const competitorComparisons = pgTable(
     competitorDomains: jsonb("competitor_domains").notNull(), // string[]
     primaryProfile: jsonb("primary_profile").notNull(),
     competitorProfiles: jsonb("competitor_profiles").notNull(), // BrandProfile[]
-    uspStatements: jsonb("usp_statements").notNull(), // { [domain]: string }
+    uspStatements: jsonb("usp_statements").notNull(), // { [domain]: CompetitivePosition }
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (table) => ({

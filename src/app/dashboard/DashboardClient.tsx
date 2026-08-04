@@ -63,10 +63,18 @@ interface Generation {
   errorMessage: string | null;
 }
 
+interface CompetitivePosition {
+  categoryPosition: string;
+  positioningOverlap: string;
+  positioningGap: string;
+  narrativeTension: string;
+  recommendedMove: string;
+}
+
 interface ComparisonResult {
   primary: BrandProfile;
   competitors: BrandProfile[];
-  uspStatements: Record<string, string>;
+  competitivePositions: Record<string, CompetitivePosition>;
 }
 
 interface User { name: string; email: string; initials: string }
@@ -639,31 +647,50 @@ function ComparisonTab({ primaryProfile }: { primaryProfile: BrandProfile }) {
             </div>
           </Card>
 
-          {/* USP Statements */}
-          {Object.keys(result.uspStatements).length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
-                Why You Win
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {result.competitors.map((competitor, i) => {
-                  const domain = (() => {
-                    try { return new URL(competitor.meta?.url || "").hostname.replace(/^www\./, ""); } catch { return ""; }
-                  })();
-                  const usp = result.uspStatements[domain];
-                  if (!usp) return null;
-                  return (
-                    <Card key={i} style={{ borderLeft: "3px solid #00d4aa" }}>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>
-                        vs. {competitor.productIntelligence?.productName || domain}
-                      </div>
-                      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.65, margin: 0 }}>
-                        {usp}
-                      </p>
-                    </Card>
-                  );
-                })}
-              </div>
+          {/* Competitive Position */}
+          {Object.keys(result.competitivePositions).length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {result.competitors.map((competitor, i) => {
+                const domain = (() => {
+                  try { return new URL(competitor.meta?.url || "").hostname.replace(/^www\./, ""); } catch { return ""; }
+                })();
+                const pos = result.competitivePositions[domain];
+                if (!pos) return null;
+                const competitorName = competitor.productIntelligence?.productName || competitor.meta?.brandName || domain;
+                const fields: { label: string; key: keyof typeof pos; accent?: boolean }[] = [
+                  { label: "Category Position", key: "categoryPosition" },
+                  { label: "Positioning Overlap", key: "positioningOverlap" },
+                  { label: "Positioning Gap", key: "positioningGap" },
+                  { label: "Narrative Tension", key: "narrativeTension" },
+                  { label: "Recommended Move", key: "recommendedMove", accent: true },
+                ];
+                return (
+                  <Card key={i}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#00d4aa", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 16 }}>
+                      Competitive Position vs {competitorName}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {fields.map(({ label, key, accent }) => (
+                        <div key={key}>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 5 }}>
+                            {label}
+                          </div>
+                          <p style={{
+                            fontSize: 13,
+                            color: accent ? "rgba(0,212,170,0.9)" : "rgba(255,255,255,0.72)",
+                            lineHeight: 1.65,
+                            margin: 0,
+                            borderLeft: accent ? "2px solid rgba(0,212,170,0.4)" : "none",
+                            paddingLeft: accent ? 10 : 0,
+                          }}>
+                            {pos[key]}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </>
