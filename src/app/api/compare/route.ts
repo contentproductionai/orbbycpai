@@ -64,10 +64,83 @@ function normalizeUrl(url: string): string {
   return url.startsWith("http") ? url : `https://${url}`;
 }
 
+// ─── WAF / bot-block detection ───────────────────────────────────────────────
+
+/**
+ * Thrown when the scraped page is a WAF challenge or bot-block page,
+ * not the actual site. Callers should skip this URL gracefully.
+ */
+class SiteBlockedError extends Error {
+  constructor(url: string, reason: string) {
+    super(`Site blocked automated access (${reason}): ${url}`);
+    this.name = "SiteBlockedError";
+  }
+}
+
+// Title / H1 patterns that indicate a WAF or bot-block page
+const BLOCK_TITLE_PATTERNS = [
+  /vercel security checkpoint/i,
+  /access denied/i,
+  /just a moment/i,          // Cloudflare interstitial
+  /please wait/i,
+  /checking your browser/i,
+  /verifying you are human/i, // Cloudflare Turnstile
+  /attention required/i,      // Cloudflare block
+  /sorry, you have been blocked/i,
+  /bot detected/i,            // PerimeterX / HUMAN
+  /are you a human/i,
+  /security check/i,
+  /ddos protection/i,
+  /ray id/i,                  // Cloudflare Ray ID page
+];
+
+// Body text patterns — used in combination with short body length
+const BLOCK_BODY_PATTERNS = [
+  /hcaptcha/i,
+  /recaptcha/i,
+  /cf-ray/i,
+  /cf-mitigated/i,
+  /cloudflare/i,
+  /perimeterx/i,
+  /px-captcha/i,
+  /human\.security/i,
+  /please enable javascript/i,
+  /enable cookies/i,
+];
+
+const BLOCK_BODY_MAX_CHARS = 300; // short body + block pattern = blocked
+
+function detectBlockPage(
+  title: string,
+  h1s: string[],
+  bodyText: string,
+  url: string
+): void {
+  const titleAndH1 = [title, ...h1s].join(" ").toLowerCase();
+  const body = bodyText.toLowerCase();
+
+  // Title/H1 match alone is sufficient
+  for (const pattern of BLOCK_TITLE_PATTERNS) {
+    if (pattern.test(titleAndH1)) {
+      throw new SiteBlockedError(url, `title/h1 matched: ${pattern.source}`);
+    }
+  }
+
+  // Short body + body pattern match = blocked
+  if (body.length < BLOCK_BODY_MAX_CHARS) {
+    for (const pattern of BLOCK_BODY_PATTERNS) {
+      if (pattern.test(body)) {
+        throw new SiteBlockedError(url, `short body (${body.length} chars) + body pattern: ${pattern.source}`);
+      }
+    }
+  }
+}
+
 /**
  * Run a full fresh extraction + perception for a URL.
  * Passes scraped website context to fetchAiPerception so models
  * identify the correct company from content, not training data alone.
+ * Throws SiteBlockedError if the scraped page is a WAF challenge.
  */
 async function extractFreshProfile(url: string): Promise<BrandProfile> {
   const workDir = path.join(os.tmpdir(), `orb-compare-${randomUUID()}`);
@@ -75,6 +148,13 @@ async function extractFreshProfile(url: string): Promise<BrandProfile> {
   try {
     const raw = await extractDom(url, workDir, () => {});
     const rawTyped = raw as Record<string, unknown>;
+
+    // Guard: detect WAF / bot-block pages before classifying
+    const pageTitle = (rawTyped.title as string | undefined) ?? "";
+    const copyText0 = rawTyped.copyText as { h1?: string[] } | undefined;
+    const h1s0 = copyText0?.h1 ?? [];
+    const bodySnippet0 = (rawTyped.bodySnippet as string | undefined) ?? "";
+    detectBlockPage(pageTitle, h1s0, bodySnippet0, url);
 
     const downloadedAssets = (rawTyped.downloadedAssets as Array<{
       src: string; localPath: string; localUrl: string;
@@ -258,12 +338,28 @@ export async function POST(req: NextRequest) {
     // Primary: always fresh (no cache)
     const primaryProfile = await extractFreshProfile(normalizeUrl(primaryUrl));
 
-    // Competitors: 7-day cache from generations, unless forceRefresh
-    const competitorProfiles = await Promise.all(
-      competitorUrls.map((url) => getCompetitorProfile(url, forceRefresh))
+    // Competitors: 7-day cache from generations, unless forceRefresh.
+    // SiteBlockedError is caught per-competitor — blocked URLs are skipped
+    // and surfaced in the response rather than aborting the whole comparison.
+    const blockedUrls: Record<string, string> = {}; // domain -> input URL
+    const competitorResults = await Promise.all(
+      competitorUrls.map(async (url) => {
+        try {
+          return await getCompetitorProfile(url, forceRefresh);
+        } catch (err) {
+          if (err instanceof SiteBlockedError) {
+            const domain = normalizeDomain(url);
+            blockedUrls[domain] = url;
+            console.warn(`[compare] Skipping blocked competitor: ${url}`);
+            return null;
+          }
+          throw err; // re-throw unexpected errors
+        }
+      })
     );
+    const competitorProfiles = competitorResults.filter((p): p is BrandProfile => p !== null);
 
-    // Generate structured competitive position for each competitor
+    // Generate structured competitive position for each accessible competitor
     const competitivePositions: Record<string, CompetitivePosition> = {};
     await Promise.all(
       competitorProfiles.map(async (competitor) => {
@@ -277,6 +373,8 @@ export async function POST(req: NextRequest) {
         primary: primaryProfile,
         competitors: competitorProfiles,
         competitivePositions,
+        // blockedUrls: { [domain]: inputUrl } for each competitor that returned a WAF page
+        blockedUrls,
       },
     });
   } catch (err: unknown) {

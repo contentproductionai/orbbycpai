@@ -75,6 +75,7 @@ interface ComparisonResult {
   primary: BrandProfile;
   competitors: BrandProfile[];
   competitivePositions: Record<string, CompetitivePosition>;
+  blockedUrls: Record<string, string>; // { [domain]: inputUrl }
 }
 
 interface User { name: string; email: string; initials: string }
@@ -635,6 +636,26 @@ function ComparisonTab({ primaryProfile }: { primaryProfile: BrandProfile }) {
           <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,100,100,0.8)" }}>{error}</div>
         )}
       </Card>
+
+      {/* Blocked URL notices */}
+      {result && Object.keys(result.blockedUrls || {}).length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {Object.entries(result.blockedUrls).map(([domain, inputUrl]) => (
+            <div key={domain} style={{
+              display: "flex", alignItems: "flex-start", gap: 10,
+              background: "rgba(255,200,100,0.05)",
+              border: "1px solid rgba(255,200,100,0.12)",
+              borderRadius: 8, padding: "10px 14px",
+            }}>
+              <span style={{ fontSize: 13, color: "rgba(255,200,100,0.5)", marginTop: 1 }}>⚠</span>
+              <div>
+                <span style={{ fontSize: 12, color: "rgba(255,200,100,0.7)", fontWeight: 500 }}>{inputUrl}</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}> — This site restricts automated access. Analysis for this competitor was skipped.</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Results */}
       {result && allProfiles.length > 0 && (
